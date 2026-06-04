@@ -1,5 +1,13 @@
 # Gestion Scolaire - Cycle primaire
 
+==============================
+Membre du Groupe
+-------------------
+Kiedega Abdoul-samando
+Ouedraogo Daouda
+
+
+
 Application web Laravel de gestion d'une ecole primaire. Elle couvre les
 annees scolaires, trimestres, classes, enseignants, matieres, affectations,
 eleves, inscriptions, paiements, impayes, emplois du temps, evaluations, notes,
