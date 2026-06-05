@@ -111,17 +111,14 @@ class EvaluationController extends Controller
         */
 
         if ($user->estEnseignant()) {
-            $affectations = ClasseMatiereUser::where('user_id', $user->id)
-                ->where('statut', 'actif')
-                ->get(['classe_id', 'matiere_id']);
-
-            $query->where(function ($q) use ($affectations) {
-                foreach ($affectations as $affectation) {
-                    $q->orWhere(function ($subQuery) use ($affectation) {
-                        $subQuery->where('classe_id', $affectation->classe_id)
-                            ->where('matiere_id', $affectation->matiere_id);
-                    });
-                }
+            $query->whereExists(function ($subQuery) use ($user) {
+                $subQuery->selectRaw('1')
+                    ->from('classe_matiere_users')
+                    ->whereColumn('classe_matiere_users.classe_id', 'evaluations.classe_id')
+                    ->whereColumn('classe_matiere_users.matiere_id', 'evaluations.matiere_id')
+                    ->where('classe_matiere_users.user_id', $user->id)
+                    ->where('classe_matiere_users.statut', 'actif')
+                    ->whereNull('classe_matiere_users.deleted_at');
             });
         }
 
