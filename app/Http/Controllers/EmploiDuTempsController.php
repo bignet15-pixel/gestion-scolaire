@@ -9,6 +9,7 @@ use App\Models\EmploiDuTemps;
 use App\Models\User;
 use Illuminate\Http\Request;
 use App\Models\Evaluation;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -22,10 +23,16 @@ class EmploiDuTempsController extends Controller
         $selectedAnneeId = $request->input('annee_scolaire_id');
         $selectedClasseId = $request->input('classe_id');
         $selectedEnseignantId = $request->input('enseignant_id');
+        $dateReference = $this->dateReference($request);
+        $debutSemaine = $dateReference->copy()->startOfWeek(Carbon::MONDAY);
+        $finSemaine = $dateReference->copy()->endOfWeek(Carbon::SATURDAY);
 
         $annees = AnneeScolaire::orderByDesc('date_debut')->get();
 
         $classes = Classe::with('anneeScolaire')
+            ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                $query->where('annee_scolaire_id', $selectedAnneeId);
+            })
             ->orderBy('annee_scolaire_id')
             ->orderBy('niveau')
             ->orderBy('nom')
@@ -56,7 +63,13 @@ class EmploiDuTempsController extends Controller
                     $q->where('user_id', $selectedEnseignantId);
                 });
             })
-            ->orderByRaw("FIELD(jour, 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi')")
+            ->where(function ($query) use ($debutSemaine) {
+                $this->appliquerSemaineExacteEmploi($query, $debutSemaine, 'emploi_du_temps');
+            })
+            ->whereHas('affectation', function ($query) use ($debutSemaine, $finSemaine) {
+                $this->appliquerChevauchementPeriode($query, $debutSemaine, $finSemaine, 'classe_matiere_users');
+            })
+            ->orderByRaw($this->ordreJoursSql('emploi_du_temps.jour'))
             ->orderBy('heure_debut')
             ->get();
 
@@ -67,25 +80,53 @@ class EmploiDuTempsController extends Controller
             'enseignants',
             'selectedAnneeId',
             'selectedClasseId',
-            'selectedEnseignantId'
+            'selectedEnseignantId',
+            'dateReference',
+            'debutSemaine',
+            'finSemaine'
         ));
     }
 
     /**
      * Affiche le formulaire de création.
      */
-    public function create()
+    public function create(Request $request)
     {
+        $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+        $selectedAnneeId = $request->input('annee_scolaire_id');
+        $dateReference = $this->dateReference($request);
+        $debutSemaine = $dateReference->copy()->startOfWeek(Carbon::MONDAY);
+        $finSemaine = $dateReference->copy()->endOfWeek(Carbon::SATURDAY);
+
+        if (! $selectedAnneeId && $annees->isNotEmpty()) {
+            $selectedAnneeId = $this->anneeScolaireCourante()?->id ?? $annees->first()->id;
+        }
+
         $affectations = ClasseMatiereUser::with([
                 'classe.anneeScolaire',
                 'matiere',
                 'enseignant',
             ])
             ->where('statut', 'actif')
+            ->whereHas('classe.anneeScolaire', function ($query) {
+                $query->where('statut', 'active');
+            })
+            ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                $query->whereHas('classe', function ($q) use ($selectedAnneeId) {
+                    $q->where('annee_scolaire_id', $selectedAnneeId);
+                });
+            })
             ->orderBy('classe_id')
             ->get();
 
-        return view('emplois_du_temps.create', compact('affectations'));
+        return view('emplois_du_temps.create', compact(
+            'affectations',
+            'annees',
+            'selectedAnneeId',
+            'dateReference',
+            'debutSemaine',
+            'finSemaine'
+        ));
     }
 
     /**
@@ -99,10 +140,21 @@ class EmploiDuTempsController extends Controller
             'heure_debut' => ['required', 'date_format:H:i'],
             'heure_fin' => ['required', 'date_format:H:i', 'after:heure_debut'],
             'salle' => ['nullable', 'string', 'max:255'],
+            'date_debut' => ['required', 'date'],
         ]);
+
+        $validated = $this->normaliserSemaineEmploi($validated);
 
         $affectation = ClasseMatiereUser::with('classe.anneeScolaire')
             ->findOrFail($validated['classe_matiere_user_id']);
+
+        if (! $affectation->estActif()) {
+            return back()
+                ->withErrors([
+                    'classe_matiere_user_id' => 'Impossible de créer un créneau avec une affectation non active.',
+                ])
+                ->withInput();
+        }
 
         if ($affectation->classe?->anneeScolaire?->estFermee()) {
             return back()
@@ -112,11 +164,19 @@ class EmploiDuTempsController extends Controller
                 ->withInput();
         }
 
+        if ($message = $this->periodeEmploiInvalide($affectation, $validated['date_debut'], $validated['date_fin'] ?? null)) {
+            return back()
+                ->withErrors(['date_debut' => $message])
+                ->withInput();
+        }
+
         if ($this->conflitExiste(
             $affectation,
             $validated['jour'],
             $validated['heure_debut'],
-            $validated['heure_fin']
+            $validated['heure_fin'],
+            $validated['date_debut'],
+            $validated['date_fin'] ?? null
         )) {
             return back()
                 ->withErrors([
@@ -128,7 +188,10 @@ class EmploiDuTempsController extends Controller
         EmploiDuTemps::create($validated);
 
         return redirect()
-            ->route('emplois-du-temps.index')
+            ->route('emplois-du-temps.index', [
+                'annee_scolaire_id' => $affectation->classe?->annee_scolaire_id,
+                'semaine' => $validated['date_debut'],
+            ])
             ->with('success', 'Créneau ajouté avec succès.');
     }
 
@@ -149,17 +212,52 @@ class EmploiDuTempsController extends Controller
     /**
      * Affiche le formulaire de modification.
      */
-    public function edit(EmploiDuTemps $emploi_du_temps)
+    public function edit(Request $request, EmploiDuTemps $emploi_du_temps)
     {
+        if ($this->emploiEstVerrouille($emploi_du_temps)) {
+            return redirect()
+                ->route('emplois-du-temps.show', $emploi_du_temps)
+                ->withErrors([
+                    'emploi_du_temps' => 'Impossible de modifier ce créneau : son année scolaire est fermée.',
+                ]);
+        }
+
+        $emploi_du_temps->loadMissing('affectation.classe.anneeScolaire');
+
+        $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+        $selectedAnneeId = $request->input('annee_scolaire_id')
+            ?? $emploi_du_temps->affectation?->classe?->annee_scolaire_id
+            ?? $this->anneeScolaireCourante()?->id;
+        $dateReference = $this->dateReference($request);
+        $debutSemaine = $dateReference->copy()->startOfWeek(Carbon::MONDAY);
+        $finSemaine = $dateReference->copy()->endOfWeek(Carbon::SATURDAY);
+
         $affectations = ClasseMatiereUser::with([
                 'classe.anneeScolaire',
                 'matiere',
                 'enseignant',
             ])
+            ->where('statut', 'actif')
+            ->whereHas('classe.anneeScolaire', function ($query) {
+                $query->where('statut', 'active');
+            })
+            ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                $query->whereHas('classe', function ($q) use ($selectedAnneeId) {
+                    $q->where('annee_scolaire_id', $selectedAnneeId);
+                });
+            })
             ->orderBy('classe_id')
             ->get();
 
-        return view('emplois_du_temps.edit', compact('emploi_du_temps', 'affectations'));
+        return view('emplois_du_temps.edit', compact(
+            'emploi_du_temps',
+            'affectations',
+            'annees',
+            'selectedAnneeId',
+            'dateReference',
+            'debutSemaine',
+            'finSemaine'
+        ));
     }
 
     /**
@@ -179,10 +277,21 @@ class EmploiDuTempsController extends Controller
             'heure_debut' => ['required', 'date_format:H:i'],
             'heure_fin' => ['required', 'date_format:H:i', 'after:heure_debut'],
             'salle' => ['nullable', 'string', 'max:255'],
+            'date_debut' => ['required', 'date'],
         ]);
+
+        $validated = $this->normaliserSemaineEmploi($validated);
 
         $affectation = ClasseMatiereUser::with('classe.anneeScolaire')
             ->findOrFail($validated['classe_matiere_user_id']);
+
+        if (! $affectation->estActif()) {
+            return back()
+                ->withErrors([
+                    'classe_matiere_user_id' => 'Impossible d’utiliser une affectation non active.',
+                ])
+                ->withInput();
+        }
 
         if ($affectation->classe?->anneeScolaire?->estFermee()) {
             return back()
@@ -192,11 +301,19 @@ class EmploiDuTempsController extends Controller
                 ->withInput();
         }
 
+        if ($message = $this->periodeEmploiInvalide($affectation, $validated['date_debut'], $validated['date_fin'] ?? null)) {
+            return back()
+                ->withErrors(['date_debut' => $message])
+                ->withInput();
+        }
+
         if ($this->conflitExiste(
             $affectation,
             $validated['jour'],
             $validated['heure_debut'],
             $validated['heure_fin'],
+            $validated['date_debut'],
+            $validated['date_fin'] ?? null,
             $emploi_du_temps->id
         )) {
             return back()
@@ -209,7 +326,10 @@ class EmploiDuTempsController extends Controller
         $emploi_du_temps->update($validated);
 
         return redirect()
-            ->route('emplois-du-temps.index')
+            ->route('emplois-du-temps.index', [
+                'annee_scolaire_id' => $affectation->classe?->annee_scolaire_id,
+                'semaine' => $validated['date_debut'],
+            ])
             ->with('success', 'Créneau modifié avec succès.');
     }
 
@@ -223,6 +343,8 @@ class EmploiDuTempsController extends Controller
                 'emploi_du_temps' => 'Impossible de supprimer ce créneau : son année scolaire est fermée.',
             ]);
         }
+
+        $emploi_du_temps->loadMissing('affectation.classe.anneeScolaire');
 
         $emploi_du_temps->update([
             'is_deleted' => true,
@@ -243,14 +365,22 @@ class EmploiDuTempsController extends Controller
         string $jour,
         string $heureDebut,
         string $heureFin,
+        string $dateDebut,
+        ?string $dateFin = null,
         ?int $ignoreId = null
     ): bool {
         $query = EmploiDuTemps::where('jour', $jour)
             ->where('heure_debut', '<', $heureFin)
             ->where('heure_fin', '>', $heureDebut)
+            ->whereDate('date_debut', $dateDebut)
+            ->whereHas('affectation.classe', function ($q) use ($affectation) {
+                $q->where('annee_scolaire_id', $affectation->classe?->annee_scolaire_id);
+            })
             ->whereHas('affectation', function ($q) use ($affectation) {
-                $q->where('classe_id', $affectation->classe_id)
-                    ->orWhere('user_id', $affectation->user_id);
+                $q->where(function ($condition) use ($affectation) {
+                    $condition->where('classe_id', $affectation->classe_id)
+                        ->orWhere('user_id', $affectation->user_id);
+                });
             });
 
         if ($ignoreId) {
@@ -267,16 +397,131 @@ class EmploiDuTempsController extends Controller
         return $emploi->affectation?->classe?->anneeScolaire?->estFermee() ?? false;
     }
 
-        /**
+    private function periodeEmploiInvalide(
+        ClasseMatiereUser $affectation,
+        string $dateDebut,
+        ?string $dateFin = null
+    ): ?string {
+        $affectation->loadMissing('classe.anneeScolaire');
+
+        $debut = Carbon::parse($dateDebut)->startOfDay();
+        $fin = $dateFin
+            ? Carbon::parse($dateFin)->startOfDay()
+            : $debut->copy()->endOfWeek(Carbon::SATURDAY)->startOfDay();
+        $annee = $affectation->classe?->anneeScolaire;
+
+        if ($affectation->date_debut && $fin->lt($affectation->date_debut)) {
+            return 'La semaine du créneau est antérieure au début de l’affectation.';
+        }
+
+        if ($affectation->date_fin && $debut->gt($affectation->date_fin)) {
+            return 'La semaine du créneau est postérieure à la fin de l’affectation.';
+        }
+
+        if ($annee?->date_debut && $fin->lt($annee->date_debut)) {
+            return 'La semaine du créneau doit appartenir à l’année scolaire de la classe.';
+        }
+
+        if ($annee?->date_fin && $debut->gt($annee->date_fin)) {
+            return 'La semaine du créneau doit appartenir à l’année scolaire de la classe.';
+        }
+
+        return null;
+    }
+
+    private function normaliserSemaineEmploi(array $validated): array
+    {
+        $debutSemaine = Carbon::parse($validated['date_debut'])
+            ->startOfWeek(Carbon::MONDAY);
+
+        $validated['date_debut'] = $debutSemaine->toDateString();
+        $validated['date_fin'] = $debutSemaine->copy()
+            ->endOfWeek(Carbon::SATURDAY)
+            ->toDateString();
+
+        return $validated;
+    }
+
+    private function appliquerSemaineExacteEmploi($query, Carbon $debutSemaine, ?string $table = null)
+    {
+        $dateDebut = $table ? $table . '.date_debut' : 'date_debut';
+
+        return $query->whereDate($dateDebut, $debutSemaine->toDateString());
+    }
+
+    private function appliquerChevauchementPeriode($query, Carbon $debutSemaine, Carbon $finSemaine, ?string $table = null)
+    {
+        $dateDebut = $table ? $table . '.date_debut' : 'date_debut';
+        $dateFin = $table ? $table . '.date_fin' : 'date_fin';
+
+        return $query
+            ->whereDate($dateDebut, '<=', $finSemaine->toDateString())
+            ->where(function ($q) use ($dateFin, $debutSemaine) {
+                $q->whereNull($dateFin)
+                    ->orWhereDate($dateFin, '>=', $debutSemaine->toDateString());
+            });
+    }
+
+    /**
      * Affiche l'emploi du temps hebdomadaire d'une classe.
      */
     public function semaineClasse(Request $request)
     {
-        $user = Auth::user();
+        return view('emplois_du_temps.semaine_classe', $this->donneesSemaineClasse($request));
+    }
 
-        $dateReference = $request->input('semaine')
-            ? Carbon::parse($request->input('semaine'))
-            : now();
+    /**
+     * Génère le PDF du planning hebdomadaire d'une classe.
+     */
+    public function imprimerSemaineClasse(Request $request)
+    {
+        $data = $this->donneesSemaineClasse($request);
+
+        $nomClasse = $data['classe']?->nom ?? 'classe';
+        $nomFichier = 'planning-classe-' . str_replace(' ', '-', strtolower($nomClasse)) . '.pdf';
+
+        return Pdf::loadView('pdf.planning_classe', $data)
+            ->setPaper('a4', 'landscape')
+            ->download($nomFichier);
+    }
+
+    /**
+     * Affiche l'emploi du temps hebdomadaire d'un enseignant.
+     */
+    public function semaineEnseignant(Request $request)
+    {
+        return view('emplois_du_temps.semaine_enseignant', $this->donneesSemaineEnseignant($request));
+    }
+
+    /**
+     * Génère le PDF du planning hebdomadaire d'un enseignant.
+     */
+    public function imprimerSemaineEnseignant(Request $request)
+    {
+        $data = $this->donneesSemaineEnseignant($request);
+
+        $nomEnseignant = $data['enseignant']?->name ?? 'enseignant';
+        $nomFichier = 'planning-enseignant-' . str_replace(' ', '-', strtolower($nomEnseignant)) . '.pdf';
+
+        return Pdf::loadView('pdf.planning_enseignant', $data)
+            ->setPaper('a4', 'landscape')
+            ->download($nomFichier);
+    }
+
+    /**
+     * Prépare les données du planning classe pour la vue et le PDF.
+     */
+    private function donneesSemaineClasse(Request $request): array
+    {
+        $user = Auth::user();
+        $selectedAnneeId = $request->input('annee_scolaire_id');
+        $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+
+        if (! $selectedAnneeId && $annees->isNotEmpty()) {
+            $selectedAnneeId = $this->anneeScolaireCourante()?->id ?? $annees->first()->id;
+        }
+
+        $dateReference = $this->dateReference($request);
 
         $debutSemaine = $dateReference->copy()->startOfWeek(Carbon::MONDAY);
         $finSemaine = $dateReference->copy()->endOfWeek(Carbon::SATURDAY);
@@ -284,12 +529,24 @@ class EmploiDuTempsController extends Controller
         $jours = $this->joursSemaine($debutSemaine);
 
         $classesQuery = Classe::with('anneeScolaire')
+            ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                $query->where('annee_scolaire_id', $selectedAnneeId);
+            })
             ->orderBy('annee_scolaire_id')
             ->orderBy('niveau')
             ->orderBy('nom');
 
         if ($user->estEnseignant()) {
             $classeIds = ClasseMatiereUser::where('user_id', $user->id)
+                ->whereIn('statut', ['actif', 'termine'])
+                ->where(function ($query) use ($debutSemaine, $finSemaine) {
+                    $this->appliquerChevauchementPeriode($query, $debutSemaine, $finSemaine, 'classe_matiere_users');
+                })
+                ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                    $query->whereHas('classe', function ($q) use ($selectedAnneeId) {
+                        $q->where('annee_scolaire_id', $selectedAnneeId);
+                    });
+                })
                 ->pluck('classe_id')
                 ->unique();
 
@@ -301,26 +558,47 @@ class EmploiDuTempsController extends Controller
         $selectedClasseId = $request->input('classe_id') ?? $classes->first()?->id;
 
         $classe = $selectedClasseId
-            ? Classe::with('anneeScolaire')->find($selectedClasseId)
+            ? $classes->first(fn ($classeOption) => (string) $classeOption->id === (string) $selectedClasseId)
             : null;
 
         $emplois = collect();
         $evaluations = collect();
 
         if ($classe) {
+            if ($user->estEnseignant()) {
+                $autorise = ClasseMatiereUser::where('user_id', $user->id)
+                    ->where('classe_id', $classe->id)
+                    ->whereIn('statut', ['actif', 'termine'])
+                    ->where(function ($query) use ($debutSemaine, $finSemaine) {
+                        $this->appliquerChevauchementPeriode($query, $debutSemaine, $finSemaine, 'classe_matiere_users');
+                    })
+                    ->exists();
+
+                if (! $autorise) {
+                    abort(403, 'Accès refusé.');
+                }
+            }
+
             $emplois = EmploiDuTemps::with([
                     'affectation.classe.anneeScolaire',
                     'affectation.matiere',
                     'affectation.enseignant',
                 ])
                 ->whereHas('affectation', function ($query) use ($classe) {
-                    $query->where('classe_id', $classe->id);
+                    $query->where('classe_id', $classe->id)
+                        ->whereIn('statut', ['actif', 'termine']);
                 })
-                ->orderByRaw("FIELD(jour, 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi')")
+                ->where(function ($query) use ($debutSemaine) {
+                    $this->appliquerSemaineExacteEmploi($query, $debutSemaine, 'emploi_du_temps');
+                })
+                ->whereHas('affectation', function ($query) use ($debutSemaine, $finSemaine) {
+                    $this->appliquerChevauchementPeriode($query, $debutSemaine, $finSemaine, 'classe_matiere_users');
+                })
+                ->orderByRaw($this->ordreJoursSql('emploi_du_temps.jour'))
                 ->orderBy('heure_debut')
                 ->get();
 
-            $evaluations = Evaluation::with(['matiere', 'createur'])
+            $evaluations = Evaluation::with(['classe', 'matiere', 'createur'])
                 ->where('classe_id', $classe->id)
                 ->whereBetween('date_evaluation', [
                     $debutSemaine->toDateString(),
@@ -330,29 +608,39 @@ class EmploiDuTempsController extends Controller
         }
 
         $planning = $this->construirePlanningAvecEvaluations($emplois, $evaluations, $jours);
+        $creneauxHoraires = $this->creneauxHorairesPlanning();
 
-        return view('emplois_du_temps.semaine_classe', compact(
-            'classes',
-            'classe',
-            'selectedClasseId',
-            'dateReference',
-            'debutSemaine',
-            'finSemaine',
-            'jours',
-            'planning'
-        ));
+        return [
+            'annees' => $annees,
+            'classes' => $classes,
+            'classe' => $classe,
+            'selectedAnneeId' => $selectedAnneeId,
+            'selectedClasseId' => $selectedClasseId,
+            'dateReference' => $dateReference,
+            'debutSemaine' => $debutSemaine,
+            'finSemaine' => $finSemaine,
+            'jours' => $jours,
+            'planning' => $planning,
+            'creneauxHoraires' => $creneauxHoraires,
+            'planningGrille' => $this->construireGrilleHoraire($planning, $creneauxHoraires),
+            'detailsPlanning' => $this->detailsPlanning($planning),
+        ];
     }
 
-        /**
-     * Affiche l'emploi du temps hebdomadaire d'un enseignant.
+    /**
+     * Prépare les données du planning enseignant pour la vue et le PDF.
      */
-    public function semaineEnseignant(Request $request)
+    private function donneesSemaineEnseignant(Request $request): array
     {
         $user = Auth::user();
+        $selectedAnneeId = $request->input('annee_scolaire_id');
+        $annees = AnneeScolaire::orderByDesc('date_debut')->get();
 
-        $dateReference = $request->input('semaine')
-            ? Carbon::parse($request->input('semaine'))
-            : now();
+        if (! $selectedAnneeId && $annees->isNotEmpty()) {
+            $selectedAnneeId = $this->anneeScolaireCourante()?->id ?? $annees->first()->id;
+        }
+
+        $dateReference = $this->dateReference($request);
 
         $debutSemaine = $dateReference->copy()->startOfWeek(Carbon::MONDAY);
         $finSemaine = $dateReference->copy()->endOfWeek(Carbon::SATURDAY);
@@ -383,20 +671,46 @@ class EmploiDuTempsController extends Controller
                     'affectation.matiere',
                     'affectation.enseignant',
                 ])
-                ->whereHas('affectation', function ($query) use ($enseignant) {
-                    $query->where('user_id', $enseignant->id);
+                ->whereHas('affectation', function ($query) use ($enseignant, $selectedAnneeId) {
+                    $query->where('user_id', $enseignant->id)
+                        ->whereIn('statut', ['actif', 'termine']);
+
+                    if ($selectedAnneeId) {
+                        $query->whereHas('classe', function ($q) use ($selectedAnneeId) {
+                            $q->where('annee_scolaire_id', $selectedAnneeId);
+                        });
+                    }
                 })
-                ->orderByRaw("FIELD(jour, 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi')")
+                ->where(function ($query) use ($debutSemaine) {
+                    $this->appliquerSemaineExacteEmploi($query, $debutSemaine, 'emploi_du_temps');
+                })
+                ->whereHas('affectation', function ($query) use ($debutSemaine, $finSemaine) {
+                    $this->appliquerChevauchementPeriode($query, $debutSemaine, $finSemaine, 'classe_matiere_users');
+                })
+                ->orderByRaw($this->ordreJoursSql('emploi_du_temps.jour'))
                 ->orderBy('heure_debut')
                 ->get();
 
-            $classeIds = $emplois
-                ->pluck('affectation.classe_id')
-                ->unique()
-                ->filter();
-
-            $evaluations = Evaluation::with(['matiere', 'createur'])
-                ->whereIn('classe_id', $classeIds)
+            $evaluations = Evaluation::with(['classe', 'matiere', 'createur'])
+                ->whereExists(function ($subQuery) use ($enseignant) {
+                    $subQuery->selectRaw('1')
+                        ->from('classe_matiere_users')
+                        ->whereColumn('classe_matiere_users.classe_id', 'evaluations.classe_id')
+                        ->whereColumn('classe_matiere_users.matiere_id', 'evaluations.matiere_id')
+                        ->where('classe_matiere_users.user_id', $enseignant->id)
+                        ->whereIn('classe_matiere_users.statut', ['actif', 'termine'])
+                        ->whereNull('classe_matiere_users.deleted_at')
+                        ->whereColumn('classe_matiere_users.date_debut', '<=', 'evaluations.date_evaluation')
+                        ->where(function ($dateQuery) {
+                            $dateQuery->whereNull('classe_matiere_users.date_fin')
+                                ->orWhereColumn('classe_matiere_users.date_fin', '>=', 'evaluations.date_evaluation');
+                        });
+                })
+                ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                    $query->whereHas('classe', function ($q) use ($selectedAnneeId) {
+                        $q->where('annee_scolaire_id', $selectedAnneeId);
+                    });
+                })
                 ->whereBetween('date_evaluation', [
                     $debutSemaine->toDateString(),
                     $finSemaine->toDateString(),
@@ -405,20 +719,26 @@ class EmploiDuTempsController extends Controller
         }
 
         $planning = $this->construirePlanningAvecEvaluations($emplois, $evaluations, $jours);
+        $creneauxHoraires = $this->creneauxHorairesPlanning();
 
-        return view('emplois_du_temps.semaine_enseignant', compact(
-            'enseignants',
-            'enseignant',
-            'selectedEnseignantId',
-            'dateReference',
-            'debutSemaine',
-            'finSemaine',
-            'jours',
-            'planning'
-        ));
+        return [
+            'annees' => $annees,
+            'enseignants' => $enseignants,
+            'enseignant' => $enseignant,
+            'selectedAnneeId' => $selectedAnneeId,
+            'selectedEnseignantId' => $selectedEnseignantId,
+            'dateReference' => $dateReference,
+            'debutSemaine' => $debutSemaine,
+            'finSemaine' => $finSemaine,
+            'jours' => $jours,
+            'planning' => $planning,
+            'creneauxHoraires' => $creneauxHoraires,
+            'planningGrille' => $this->construireGrilleHoraire($planning, $creneauxHoraires),
+            'detailsPlanning' => $this->detailsPlanning($planning),
+        ];
     }
 
-        /**
+    /**
      * Retourne les jours de la semaine avec leurs dates réelles.
      */
     private function joursSemaine(Carbon $debutSemaine): array
@@ -433,10 +753,119 @@ class EmploiDuTempsController extends Controller
         ];
     }
 
-        /**
-     * Construit le planning hebdomadaire.
-     * Si une évaluation existe pour la même classe, la même date et la même heure,
-     * elle prend la place du cours normal.
+    /**
+     * Définit les lignes horaires utilisées par les plannings.
+     */
+    private function creneauxHorairesPlanning(): array
+    {
+        return [
+            ['id' => '07_08', 'debut' => '07:00', 'fin' => '08:00', 'label' => '07h00 - 08h00', 'type' => 'cours'],
+            ['id' => '08_09', 'debut' => '08:00', 'fin' => '09:00', 'label' => '08h00 - 09h00', 'type' => 'cours'],
+            ['id' => '09_10', 'debut' => '09:00', 'fin' => '10:00', 'label' => '09h00 - 10h00', 'type' => 'cours'],
+            ['id' => 'pause_10_1030', 'debut' => '10:00', 'fin' => '10:30', 'label' => '10h00 - 10h30', 'type' => 'pause', 'texte' => 'Pause'],
+            ['id' => '1030_1130', 'debut' => '10:30', 'fin' => '11:30', 'label' => '10h30 - 11h30', 'type' => 'cours'],
+            ['id' => '1130_12', 'debut' => '11:30', 'fin' => '12:00', 'label' => '11h30 - 12h00', 'type' => 'cours'],
+            ['id' => '12_13', 'debut' => '12:00', 'fin' => '13:00', 'label' => '12h00 - 13h00', 'type' => 'vide', 'texte' => ''],
+            ['id' => '13_14', 'debut' => '13:00', 'fin' => '14:00', 'label' => '13h00 - 14h00', 'type' => 'cours'],
+            ['id' => '14_15', 'debut' => '14:00', 'fin' => '15:00', 'label' => '14h00 - 15h00', 'type' => 'cours'],
+            ['id' => '15_16', 'debut' => '15:00', 'fin' => '16:00', 'label' => '15h00 - 16h00', 'type' => 'cours'],
+            ['id' => '16_17', 'debut' => '16:00', 'fin' => '17:00', 'label' => '16h00 - 17h00', 'type' => 'cours'],
+            ['id' => '17_18', 'debut' => '17:00', 'fin' => '18:00', 'label' => '17h00 - 18h00', 'type' => 'cours'],
+        ];
+    }
+
+    /**
+     * Range les cours dans les cellules jour + heure du planning.
+     */
+    private function construireGrilleHoraire(array $planning, array $creneauxHoraires): array
+    {
+        $grille = [];
+
+        foreach ($creneauxHoraires as $creneau) {
+            if ($creneau['type'] !== 'cours') {
+                continue;
+            }
+
+            foreach (array_keys($planning) as $jour) {
+                $grille[$creneau['id']][$jour] = [];
+            }
+        }
+
+        foreach ($planning as $jour => $items) {
+            foreach ($items as $item) {
+                $debutCours = $this->heureEnMinutes($item['heure_debut']);
+                $finCours = $this->heureEnMinutes($item['heure_fin']);
+
+                foreach ($creneauxHoraires as $creneau) {
+                    if ($creneau['type'] !== 'cours') {
+                        continue;
+                    }
+
+                    $debutCreneau = $this->heureEnMinutes($creneau['debut']);
+                    $finCreneau = $this->heureEnMinutes($creneau['fin']);
+
+                    $chevauche = $debutCours < $finCreneau && $finCours > $debutCreneau;
+
+                    if ($chevauche) {
+                        $grille[$creneau['id']][$jour][] = $item;
+                    }
+                }
+            }
+        }
+
+        foreach ($grille as $creneauId => $jours) {
+            foreach ($jours as $jour => $items) {
+                $evaluations = collect($items)->filter(fn ($item) => $item['evaluation']);
+
+                if ($evaluations->isNotEmpty()) {
+                    $grille[$creneauId][$jour] = $evaluations->values()->all();
+                }
+            }
+        }
+
+        return $grille;
+    }
+
+    private function heureEnMinutes(string $heure): int
+    {
+        [$heures, $minutes] = array_map('intval', explode(':', $heure));
+
+        return ($heures * 60) + $minutes;
+    }
+
+    /**
+     * Prépare le tableau récapitulatif des enseignants, salles et coefficients.
+     */
+    private function detailsPlanning(array $planning)
+    {
+        return collect($planning)
+            ->flatMap(fn ($items) => $items)
+            ->filter(fn ($item) => $item['emploi'])
+            ->map(function ($item) {
+                $affectation = $item['emploi']->affectation;
+
+                return [
+                    'classe' => $affectation?->classe?->nom ?? '-',
+                    'matiere' => $affectation?->matiere?->nom ?? '-',
+                    'enseignant' => $affectation?->enseignant?->name ?? '-',
+                    'salle' => $item['emploi']->salle ?? '-',
+                    'coefficient' => $affectation?->coefficient,
+                ];
+            })
+            ->unique(function ($detail) {
+                return implode('|', [
+                    $detail['classe'],
+                    $detail['matiere'],
+                    $detail['enseignant'],
+                    $detail['salle'],
+                    $detail['coefficient'],
+                ]);
+            })
+            ->values();
+    }
+
+    /**
+     * Construit le planning hebdomadaire avec les cours et les évaluations programmées.
      */
     private function construirePlanningAvecEvaluations($emplois, $evaluations, array $jours)
     {
@@ -458,37 +887,88 @@ class EmploiDuTempsController extends Controller
             $heureDebut = $emploi->heure_debut->format('H:i');
             $heureFin = $emploi->heure_fin->format('H:i');
 
-            $classeId = $emploi->affectation->classe_id;
-
-            $evaluation = $evaluations->first(function ($evaluation) use (
-                $classeId,
-                $dateJour,
-                $heureDebut,
-                $heureFin
-            ) {
-                return (int) $evaluation->classe_id === (int) $classeId
-                    && $evaluation->date_evaluation?->toDateString() === $dateJour
-                    && $evaluation->heure_debut?->format('H:i') === $heureDebut
-                    && $evaluation->heure_fin?->format('H:i') === $heureFin;
-            });
-
             $planning[$jour][] = [
                 'emploi' => $emploi,
-                'evaluation' => $evaluation,
+                'evaluation' => null,
                 'date' => $dateJour,
                 'heure_debut' => $heureDebut,
                 'heure_fin' => $heureFin,
             ];
         }
 
+        foreach ($evaluations as $evaluation) {
+            if (! $evaluation->date_evaluation || ! $evaluation->heure_debut || ! $evaluation->heure_fin) {
+                continue;
+            }
+
+            $dateEvaluation = $evaluation->date_evaluation->toDateString();
+
+            $jourEvaluation = collect($jours)->search(function ($dateJour) use ($dateEvaluation) {
+                return $dateJour->toDateString() === $dateEvaluation;
+            });
+
+            if (! $jourEvaluation) {
+                continue;
+            }
+
+            $planning[$jourEvaluation][] = [
+                'emploi' => null,
+                'evaluation' => $evaluation,
+                'date' => $dateEvaluation,
+                'heure_debut' => $evaluation->heure_debut->format('H:i'),
+                'heure_fin' => $evaluation->heure_fin->format('H:i'),
+            ];
+        }
+
         foreach ($planning as $jour => $creneaux) {
             usort($creneaux, function ($a, $b) {
-                return strcmp($a['heure_debut'], $b['heure_debut']);
+                $heure = strcmp($a['heure_debut'], $b['heure_debut']);
+
+                if ($heure !== 0) {
+                    return $heure;
+                }
+
+                return (int) ! $a['evaluation'] <=> (int) ! $b['evaluation'];
             });
 
             $planning[$jour] = $creneaux;
         }
 
         return $planning;
+    }
+
+    private function anneeScolaireCourante(): ?AnneeScolaire
+    {
+        return AnneeScolaire::where('statut', 'active')
+            ->orderByDesc('date_debut')
+            ->first()
+            ?? AnneeScolaire::orderByDesc('date_debut')->first();
+    }
+
+    private function dateReference(Request $request): Carbon
+    {
+        $semaine = $request->input('semaine');
+
+        if (! is_string($semaine) || trim($semaine) === '') {
+            return Carbon::now();
+        }
+
+        try {
+            return Carbon::parse($semaine);
+        } catch (\Throwable) {
+            return Carbon::now();
+        }
+    }
+
+    private function ordreJoursSql(string $colonne): string
+    {
+        return "CASE {$colonne} "
+            . "WHEN 'lundi' THEN 1 "
+            . "WHEN 'mardi' THEN 2 "
+            . "WHEN 'mercredi' THEN 3 "
+            . "WHEN 'jeudi' THEN 4 "
+            . "WHEN 'vendredi' THEN 5 "
+            . "WHEN 'samedi' THEN 6 "
+            . "ELSE 7 END";
     }
 }

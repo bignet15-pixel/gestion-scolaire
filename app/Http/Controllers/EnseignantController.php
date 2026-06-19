@@ -185,20 +185,30 @@ class EnseignantController extends Controller
      */
     private function genererMatriculeEnseignant(): string
     {
-        $dernier = User::where('role', 'enseignant')
+        $plusGrandNumero = User::withTrashed()
+            ->where('role', 'enseignant')
             ->whereNotNull('matricule')
             ->where('matricule', 'like', 'ENS-%')
-            ->orderByDesc('id')
-            ->first();
+            ->pluck('matricule')
+            ->map(function ($matricule) {
+                if (preg_match('/^ENS-(\d+)$/', $matricule, $matches)) {
+                    return (int) $matches[1];
+                }
 
-        if (! $dernier) {
-            return 'ENS-0001';
+                return null;
+            })
+            ->filter(fn ($numero) => $numero !== null)
+            ->max() ?? 0;
+
+        $numero = $plusGrandNumero + 1;
+        $matricule = 'ENS-' . str_pad($numero, 4, '0', STR_PAD_LEFT);
+
+        while (User::withTrashed()->where('matricule', $matricule)->exists()) {
+            $numero++;
+            $matricule = 'ENS-' . str_pad($numero, 4, '0', STR_PAD_LEFT);
         }
 
-        $numero = (int) str_replace('ENS-', '', $dernier->matricule);
-        $numero++;
-
-        return 'ENS-' . str_pad($numero, 4, '0', STR_PAD_LEFT);
+        return $matricule;
     }
 
     /**

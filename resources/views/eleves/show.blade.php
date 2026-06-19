@@ -1,5 +1,4 @@
 <x-app-layout>
-{{-- Vue Blade : resources/views/eleves/show.blade.php --}}
     <div class="container">
         <div class="detail-header-card">
             <div>
@@ -23,6 +22,14 @@
                 </a>
             </div>
         </div>
+
+        @if ($errors->any())
+            <div class="alert alert-danger">
+                @foreach ($errors->all() as $error)
+                    <div>{{ $error }}</div>
+                @endforeach
+            </div>
+        @endif
 
         <div class="student-profile-card">
             <div class="student-photo-box">
@@ -73,10 +80,10 @@
         <div class="card">
             <h2>Filtrer le parcours</h2>
 
-            <form action="{{ route('eleves.show', $eleve) }}" method="GET" class="filter-form">
+            <form action="{{ route('eleves.show', $eleve) }}" method="GET" class="filter-form js-eleve-parcours-filter">
                 <div class="form-group">
                     <label class="form-label">Année scolaire</label>
-                    <select name="annee_scolaire_id" class="form-control">
+                    <select name="annee_scolaire_id" class="form-control js-eleve-parcours-annee">
                         <option value="">Toutes les années</option>
 
                         {{-- Affiche l historique des inscriptions. --}}
@@ -90,12 +97,16 @@
 
                 <div class="form-group">
                     <label class="form-label">Classe</label>
-                    <select name="classe_id" class="form-control">
+                    <select name="classe_id" class="form-control js-eleve-parcours-classe">
                         <option value="">Toutes les classes</option>
 
                         {{-- Affiche l historique des inscriptions. --}}
                         @foreach ($inscriptionsOptions as $inscriptionOption)
-                            <option value="{{ $inscriptionOption->classe_id }}" @selected((string) $selectedClasseId === (string) $inscriptionOption->classe_id)>
+                            <option
+                                value="{{ $inscriptionOption->classe_id }}"
+                                data-annee="{{ $inscriptionOption->annee_scolaire_id }}"
+                                @selected((string) $selectedClasseId === (string) $inscriptionOption->classe_id)
+                            >
                                 {{ $inscriptionOption->classe?->nom ?? '-' }} — {{ $inscriptionOption->anneeScolaire?->libelle ?? '-' }}
                             </option>
                         @endforeach
@@ -175,66 +186,163 @@
                             <div>
                                 <h3>{{ $resultatTrimestre['trimestre']->nom }}</h3>
 
-                                <p>
-                                    Moyenne :
+                                @if (! $resultatTrimestre['publie'])
+                                    <span class="badge {{ $resultatTrimestre['statut_badge'] }}">
+                                        {{ $resultatTrimestre['statut_libelle'] }}
+                                    </span>
+                                @endif
+                            </div>
+
+                            @if ($resultatTrimestre['publie'])
+                                <a
+                                    href="{{ route('bulletins.trimestriel', [$bloc['inscription'], $resultatTrimestre['trimestre']]) }}"
+                                    class="btn btn-primary"
+                                >
+                                    Bulletin PDF
+                                </a>
+                            @endif
+                        </div>
+
+                        @if ($resultatTrimestre['publie'])
+                            <div class="trimester-summary-grid">
+                                <div class="trimester-summary-item">
+                                    <span>Moyenne</span>
                                     <strong>
-                                        {{-- Condition : $resultatTrimestre['moyenne'] !== null. --}}
                                         @if ($resultatTrimestre['moyenne'] !== null)
                                             {{ number_format($resultatTrimestre['moyenne'], 2, ',', ' ') }}/20
-                                        {{-- Sinon, affichage de l alternative prevue. --}}
                                         @else
                                             -
                                         @endif
                                     </strong>
-                                    |
-                                    Rang :
+                                </div>
+
+                                <div class="trimester-summary-item">
+                                    <span>Rang</span>
+                                    <strong>{{ $resultatTrimestre['rang'] ?? '-' }}</strong>
+                                </div>
+
+                                <div class="trimester-summary-item">
+                                    <span>Total pondéré</span>
                                     <strong>
-                                        {{ $resultatTrimestre['rang'] ?? '-' }}
+                                        {{ $resultatTrimestre['total_pondere'] !== null ? number_format($resultatTrimestre['total_pondere'], 2, ',', ' ') : '-' }}
                                     </strong>
-                                    |
-                                    Appréciation :
+                                </div>
+
+                                <div class="trimester-summary-item">
+                                    <span>Coefficients</span>
+                                    <strong>{{ number_format($resultatTrimestre['total_coefficients'], 2, ',', ' ') }}</strong>
+                                </div>
+
+                                <div class="trimester-summary-item trimester-summary-wide">
+                                    <span>Appréciation</span>
                                     <strong>{{ $resultatTrimestre['appreciation'] }}</strong>
-                                </p>
+                                </div>
                             </div>
-                        </div>
 
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Évaluation</th>
-                                    <th>Matière</th>
-                                    <th>Type</th>
-                                    <th>Note</th>
-                                    <th>Barème</th>
-                                    <th>Appréciation</th>
-                                </tr>
-                            </thead>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Évaluation</th>
+                                        <th>Matière</th>
+                                        <th>Type</th>
+                                        <th>Note</th>
+                                        <th>Barème</th>
+                                        <th>Appréciation</th>
+                                    </tr>
+                                </thead>
 
-                            <tbody>
-                                {{-- Affiche les notes de l evaluation, ou le message vide si aucune note n existe. --}}
-                                @forelse ($resultatTrimestre['notes'] as $note)
-                                    <tr>
-                                        <td>{{ $note->evaluation?->date_evaluation?->format('d/m/Y') ?? '-' }}</td>
-                                        <td>{{ $note->evaluation?->nom ?? '-' }}</td>
-                                        <td>{{ $note->evaluation?->matiere?->nom ?? '-' }}</td>
-                                        <td>{{ $note->evaluation?->type ?? '-' }}</td>
-                                        <td>{{ $note->valeur }}</td>
-                                        <td>{{ $note->evaluation?->bareme ?? '-' }}</td>
-                                        <td>{{ $note->appreciation ?? '-' }}</td>
-                                    </tr>
-                                {{-- Message affiche quand la liste est vide. --}}
-                                @empty
-                                    <tr>
-                                        <td colspan="7">
-                                            Aucune note pour ce trimestre.
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
+                                <tbody>
+                                    {{-- Affiche les notes de l evaluation, ou le message vide si aucune note n existe. --}}
+                                    @forelse ($resultatTrimestre['notes'] as $note)
+                                        <tr>
+                                            <td>{{ $note->evaluation?->date_evaluation?->format('d/m/Y') ?? '-' }}</td>
+                                            <td>{{ $note->evaluation?->nom ?? '-' }}</td>
+                                            <td>{{ $note->evaluation?->matiere?->nom ?? '-' }}</td>
+                                            <td>{{ $note->evaluation?->type ?? '-' }}</td>
+                                            <td>{{ $note->valeur }}</td>
+                                            <td>{{ $note->evaluation?->bareme ?? '-' }}</td>
+                                            <td>{{ $note->appreciation ?? '-' }}</td>
+                                        </tr>
+                                    {{-- Message affiche quand la liste est vide. --}}
+                                    @empty
+                                        <tr>
+                                            <td colspan="7">
+                                                Aucune note publiée pour ce trimestre.
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        @else
+                            <div class="result-unpublished-box">
+                                @if ($resultatTrimestre['statut_pedagogique'] === 'pas_encore_programme')
+                                    Ce trimestre n’est pas encore programmé.
+                                @elseif ($resultatTrimestre['statut_pedagogique'] === 'en_cours')
+                                    Le trimestre est en cours. Les notes, la moyenne et le rang seront affichés après la fin du trimestre.
+                                @elseif ($resultatTrimestre['notes_manquantes'] > 0)
+                                    Ce trimestre est terminé, mais {{ $resultatTrimestre['notes_manquantes'] }} note(s) attendue(s) ne sont pas encore saisie(s).
+                                @elseif ($resultatTrimestre['evaluations_attendues'] === 0)
+                                    Aucune évaluation n’est programmée pour ce trimestre.
+                                @else
+                                    Les résultats de ce trimestre ne sont pas encore publiés.
+                                @endif
+                            </div>
+                        @endif
                     </div>
                 @endforeach
+
+                <div class="annual-result-card">
+                    <div class="annual-result-head">
+                        <div>
+                            <h3>Résultat annuel</h3>
+                            <p>
+                                {{ $bloc['inscription']->classe?->nom }}
+                                /
+                                {{ $bloc['inscription']->anneeScolaire?->libelle }}
+                            </p>
+                        </div>
+
+                        @if ($bloc['annuel']['publie'])
+                            <div class="annual-result-actions">
+                                <span class="badge {{ $bloc['annuel']['decision'] === 'Passe' ? 'badge-success' : 'badge-danger' }}">
+                                    {{ $bloc['annuel']['decision'] }}
+                                </span>
+
+                                <a href="{{ route('bulletins.annuel', $bloc['inscription']) }}" class="btn btn-primary">
+                                    Bulletin annuel PDF
+                                </a>
+                            </div>
+                        @else
+                            <span class="badge badge-muted">
+                                Non disponible
+                            </span>
+                        @endif
+                    </div>
+
+                    @if ($bloc['annuel']['publie'])
+                        <div class="annual-result-grid">
+                            <div>
+                                <span>Moyenne annuelle</span>
+                                <strong>{{ number_format($bloc['annuel']['moyenne'], 2, ',', ' ') }}/20</strong>
+                            </div>
+
+                            <div>
+                                <span>Rang annuel</span>
+                                <strong>{{ $bloc['annuel']['rang'] ?? '-' }}</strong>
+                            </div>
+
+                            <div>
+                                <span>Appréciation</span>
+                                <strong>{{ $bloc['annuel']['appreciation'] }}</strong>
+                            </div>
+                        </div>
+                    @else
+                        <div class="result-unpublished-box">
+                            {{ $bloc['annuel']['message'] }}
+                        </div>
+                    @endif
+                </div>
             </div>
         {{-- Message affiche quand la liste est vide. --}}
         @empty

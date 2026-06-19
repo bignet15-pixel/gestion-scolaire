@@ -53,6 +53,10 @@ class TrimestreController extends Controller
                 ->withInput();
         }
 
+        if ($validated['statut'] === 'ferme') {
+            $validated['date_fin'] = now()->toDateString();
+        }
+
         Trimestre::create($validated);
 
         return redirect()
@@ -99,6 +103,16 @@ class TrimestreController extends Controller
                 ->withInput();
         }
 
+        if ($validated['statut'] === 'ferme') {
+            if ($message = $trimestre->messageBlocageFermeture()) {
+                return back()
+                    ->withErrors(['trimestre' => $message])
+                    ->withInput();
+            }
+
+            $validated['date_fin'] = now()->toDateString();
+        }
+
         $trimestre->update($validated);
 
         return redirect()
@@ -139,8 +153,15 @@ class TrimestreController extends Controller
             ]);
         }
 
+        if ($message = $trimestre->messageBlocageFermeture()) {
+            return back()->withErrors([
+                'trimestre' => $message,
+            ]);
+        }
+
         $trimestre->update([
             'statut' => 'ferme',
+            'date_fin' => now()->toDateString(),
         ]);
 
         return redirect()
@@ -153,9 +174,11 @@ class TrimestreController extends Controller
      */
     public function activer(Trimestre $trimestre)
     {
-        if ($this->trimestreEstVerrouille($trimestre)) {
+        $trimestre->loadMissing('anneeScolaire');
+
+        if ($trimestre->anneeScolaire?->estFermee()) {
             return back()->withErrors([
-                'trimestre' => 'Impossible d’activer ce trimestre : il est fermé ou son année scolaire est fermée.',
+                'trimestre' => 'Impossible d’activer ce trimestre : son année scolaire est fermée.',
             ]);
         }
 

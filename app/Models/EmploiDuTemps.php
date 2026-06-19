@@ -18,12 +18,16 @@ class EmploiDuTemps extends Model
         'heure_debut',
         'heure_fin',
         'salle',
+        'date_debut',
+        'date_fin',
         'is_deleted',
     ];
 
     protected $casts = [
         'heure_debut' => 'datetime:H:i',
         'heure_fin' => 'datetime:H:i',
+        'date_debut' => 'date',
+        'date_fin' => 'date',
         'is_deleted' => 'boolean',
         'deleted_at' => 'datetime',
     ];
@@ -49,4 +53,3 @@ class EmploiDuTemps extends Model
         return $this->affectation?->enseignant;
     }
 }
-

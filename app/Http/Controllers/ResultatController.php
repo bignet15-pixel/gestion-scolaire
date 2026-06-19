@@ -26,7 +26,7 @@ class ResultatController extends Controller
         $annees = AnneeScolaire::orderByDesc('date_debut')->get();
 
         if (! $selectedAnneeId && $annees->isNotEmpty()) {
-            $selectedAnneeId = $annees->first()->id;
+            $selectedAnneeId = $this->anneeScolaireCourante()?->id ?? $annees->first()->id;
         }
 
         $classesQuery = Classe::with('anneeScolaire')
@@ -38,7 +38,12 @@ class ResultatController extends Controller
 
         if ($user->estEnseignant()) {
             $classeIds = ClasseMatiereUser::where('user_id', $user->id)
-                ->where('statut', 'actif')
+                ->whereIn('statut', ['actif', 'termine'])
+                ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                    $query->whereHas('classe', function ($q) use ($selectedAnneeId) {
+                        $q->where('annee_scolaire_id', $selectedAnneeId);
+                    });
+                })
                 ->pluck('classe_id')
                 ->unique();
 
@@ -52,13 +57,13 @@ class ResultatController extends Controller
         }
 
         $classe = $selectedClasseId
-            ? Classe::with('anneeScolaire')->find($selectedClasseId)
+            ? $classes->first(fn ($classeOption) => (string) $classeOption->id === (string) $selectedClasseId)
             : null;
 
         if ($user->estEnseignant() && $classe) {
             $autorise = ClasseMatiereUser::where('user_id', $user->id)
                 ->where('classe_id', $classe->id)
-                ->where('statut', 'actif')
+                ->whereIn('statut', ['actif', 'termine'])
                 ->exists();
 
             if (! $autorise) {
@@ -108,7 +113,7 @@ class ResultatController extends Controller
                     $totalCoefficientsClasse
                 );
             } else {
-                $trimestre = Trimestre::find($selectedPeriode);
+                $trimestre = $trimestres->first(fn ($trimestreOption) => (string) $trimestreOption->id === (string) $selectedPeriode);
 
                 if ($trimestre) {
                     $classement = $this->calculerResultatsTrimestriels(
@@ -465,5 +470,13 @@ class ResultatController extends Controller
         }
 
         return 'Redouble';
+    }
+
+    private function anneeScolaireCourante(): ?AnneeScolaire
+    {
+        return AnneeScolaire::where('statut', 'active')
+            ->orderByDesc('date_debut')
+            ->first()
+            ?? AnneeScolaire::orderByDesc('date_debut')->first();
     }
 }

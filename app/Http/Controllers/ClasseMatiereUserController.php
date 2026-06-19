@@ -60,10 +60,26 @@ class ClasseMatiereUserController extends Controller
     /**
      * Affiche le formulaire de création.
      */
-    public function create()
+    public function create(Request $request)
     {
+        $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+        $selectedAnneeId = $request->filled('annee_scolaire_id')
+            ? $request->input('annee_scolaire_id')
+            : $annees->first(fn ($annee) => $annee->estActive())?->id;
+
+        $selectedAnnee = $annees->first(
+            fn ($annee) => (string) $annee->id === (string) $selectedAnneeId
+        );
+
+        if (! $selectedAnnee && $annees->isNotEmpty()) {
+            $selectedAnnee = $annees->first();
+            $selectedAnneeId = $selectedAnnee->id;
+        }
+
         $classes = Classe::with('anneeScolaire')
-            ->orderBy('annee_scolaire_id')
+            ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                $query->where('annee_scolaire_id', $selectedAnneeId);
+            })
             ->orderBy('niveau')
             ->orderBy('nom')
             ->get();
@@ -75,7 +91,14 @@ class ClasseMatiereUserController extends Controller
             ->orderBy('prenom')
             ->get();
 
-        return view('affectations.create', compact('classes', 'matieres', 'enseignants'));
+        return view('affectations.create', compact(
+            'annees',
+            'selectedAnnee',
+            'selectedAnneeId',
+            'classes',
+            'matieres',
+            'enseignants'
+        ));
     }
 
     /**
@@ -84,6 +107,7 @@ class ClasseMatiereUserController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'annee_scolaire_id' => ['required', 'exists:annee_scolaires,id'],
             'classe_id' => ['required', 'exists:classes,id'],
             'matiere_id' => ['required', 'exists:matieres,id'],
             'user_id' => [
@@ -96,7 +120,18 @@ class ClasseMatiereUserController extends Controller
             'statut' => ['required', 'in:actif,termine,suspendu'],
         ]);
 
-        $classe = Classe::with('anneeScolaire')->findOrFail($validated['classe_id']);
+        $classe = Classe::with('anneeScolaire')
+            ->whereKey($validated['classe_id'])
+            ->where('annee_scolaire_id', $validated['annee_scolaire_id'])
+            ->first();
+
+        if (! $classe) {
+            return back()
+                ->withErrors([
+                    'classe_id' => 'La classe choisie ne correspond pas à l’année scolaire sélectionnée.',
+                ])
+                ->withInput();
+        }
 
         if ($classe->anneeScolaire?->estFermee()) {
             return back()
@@ -119,10 +154,15 @@ class ClasseMatiereUserController extends Controller
                 ->withInput();
         }
 
+        unset($validated['annee_scolaire_id']);
+
         ClasseMatiereUser::create($validated);
 
         return redirect()
-            ->route('affectations.index')
+            ->route('affectations.index', [
+                'annee_scolaire_id' => $classe->annee_scolaire_id,
+                'classe_id' => $classe->id,
+            ])
             ->with('success', 'Affectation créée avec succès.');
     }
 

@@ -52,6 +52,16 @@ class Inscription extends Model
         return $this->hasMany(Note::class);
     }
 
+    public function absencesRetards()
+    {
+        return $this->hasMany(AbsenceRetard::class);
+    }
+
+    public function sanctionsAppliquees()
+    {
+        return $this->hasMany(SanctionAppliquee::class);
+    }
+
     public function totalPaye(): float
     {
         return (float) $this->paiements()->sum('montant');

@@ -64,7 +64,10 @@
             {{-- Condition : ! $creationVerrouillee. --}}
             @if (! $creationVerrouillee)
                 <p>
-                    <a href="{{ route('affectations.create') }}" class="btn btn-primary">
+                    <a
+                        href="{{ route('affectations.create', ['annee_scolaire_id' => $selectedAnneeId]) }}"
+                        class="btn btn-primary"
+                    >
                         Ajouter une affectation
                     </a>
                 </p>

@@ -4,6 +4,37 @@
         <div class="card">
             <h1>Ajouter une classe</h1>
 
+            <form action="{{ route('classes.create') }}" method="GET" class="filter-form">
+                <div class="form-group">
+                    <label class="form-label">Année scolaire</label>
+                    <select name="annee_scolaire_id" class="form-control">
+                        @foreach ($annees as $annee)
+                            <option value="{{ $annee->id }}" @selected((string) $selectedAnneeId === (string) $annee->id)>
+                                {{ $annee->libelle }}{{ $annee->estFermee() ? ' — fermée' : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <input type="hidden" name="niveau" value="{{ $selectedNiveau }}">
+
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">
+                        Afficher
+                    </button>
+                </div>
+            </form>
+
+            @if (! $selectedAnnee)
+                <div class="alert alert-warning">
+                    Aucune année scolaire n’est disponible pour créer une classe.
+                </div>
+            @elseif ($selectedAnnee->estFermee())
+                <div class="alert alert-warning">
+                    Cette année scolaire est fermée. Ses classes sont disponibles uniquement dans l’historique.
+                </div>
+            @endif
+
             {{-- Condition : $errors->any(). --}}
             @if ($errors->any())
                 <div class="alert alert-danger">
@@ -20,24 +51,14 @@
                 {{-- Jeton de securite du formulaire. --}}
                 @csrf
 
-                <div class="form-group">
-                    <label class="form-label">Année scolaire</label>
-                    <select name="annee_scolaire_id" class="form-control">
-                        {{-- Remplit la liste des annees scolaires. --}}
-                        @foreach ($annees as $annee)
-                            <option value="{{ $annee->id }}" @selected(old('annee_scolaire_id') == $annee->id)>
-                                {{ $annee->libelle }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
+                <input type="hidden" name="annee_scolaire_id" value="{{ $selectedAnneeId }}">
 
                 <div class="form-group">
                     <label class="form-label">Niveau</label>
                     <select name="niveau" class="form-control">
                         {{-- Affiche les elements de ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2']. --}}
                         @foreach (['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'] as $niveau)
-                            <option value="{{ $niveau }}" @selected(old('niveau') === $niveau)>
+                            <option value="{{ $niveau }}" @selected(old('niveau', $selectedNiveau) === $niveau)>
                                 {{ $niveau }}
                             </option>
                         @endforeach
@@ -68,11 +89,17 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" @disabled(! $selectedAnnee || $selectedAnnee->estFermee())>
                     Enregistrer
                 </button>
 
-                <a href="{{ route('classes.index') }}" class="btn">
+                <a
+                    href="{{ route('classes.index', [
+                        'annee_scolaire_id' => $selectedAnneeId,
+                        'niveau' => $selectedNiveau,
+                    ]) }}"
+                    class="btn"
+                >
                     Retour
                 </a>
             </form>

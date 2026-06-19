@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use App\Models\ClasseMatiereUser;
 use App\Models\Evaluation;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Auth;
 
 class ClasseController extends Controller
 {
@@ -52,16 +54,37 @@ class ClasseController extends Controller
     /**
      * Affiche le formulaire de création d'une classe.
      */
-    public function create()
+    public function create(Request $request)
     {
         $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+        $selectedAnneeId = $request->filled('annee_scolaire_id')
+            ? $request->input('annee_scolaire_id')
+            : $annees->first(fn ($annee) => $annee->estActive())?->id;
+        $selectedNiveau = in_array($request->input('niveau'), ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'], true)
+            ? $request->input('niveau')
+            : null;
+
+        $selectedAnnee = $annees->first(
+            fn ($annee) => (string) $annee->id === (string) $selectedAnneeId
+        );
+
+        if (! $selectedAnnee && $annees->isNotEmpty()) {
+            $selectedAnnee = $annees->first();
+            $selectedAnneeId = $selectedAnnee->id;
+        }
 
         $enseignants = User::where('role', 'enseignant')
             ->orderBy('nom')
             ->orderBy('prenom')
             ->get();
 
-        return view('classes.create', compact('annees', 'enseignants'));
+        return view('classes.create', compact(
+            'annees',
+            'enseignants',
+            'selectedAnnee',
+            'selectedAnneeId',
+            'selectedNiveau'
+        ));
     }
 
     /**
@@ -104,7 +127,10 @@ class ClasseController extends Controller
         Classe::create($validated);
 
         return redirect()
-            ->route('classes.index')
+            ->route('classes.index', [
+                'annee_scolaire_id' => $validated['annee_scolaire_id'],
+                'niveau' => $validated['niveau'],
+            ])
             ->with('success', 'Classe créée avec succès.');
     }
 
@@ -129,7 +155,134 @@ class ClasseController extends Controller
             ->select('inscriptions.*')
             ->get();
 
-        return view('classes.show', compact('classe', 'inscriptions'));
+        $retourUrl = route('classes.index');
+        $pdfUrl = route('classes.eleves-pdf', $classe);
+        [$planningUrl, $planningPdfUrl] = $this->liensPlanningClasse($classe);
+        $affectationsTitre = 'Enseignants intervenants';
+
+        return view('classes.show', compact(
+            'classe',
+            'inscriptions',
+            'retourUrl',
+            'pdfUrl',
+            'planningUrl',
+            'planningPdfUrl',
+            'affectationsTitre'
+        ));
+    }
+
+    /**
+     * Affiche les classes de l'enseignant connecté.
+     */
+    public function mesClasses(Request $request)
+    {
+        $user = Auth::user();
+
+        $selectedAnneeId = $request->input('annee_scolaire_id');
+
+        $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+
+        if (! $selectedAnneeId && $annees->isNotEmpty()) {
+            $selectedAnneeId = $this->anneeScolaireCourante()?->id ?? $annees->first()->id;
+        }
+
+        $classeIds = ClasseMatiereUser::where('user_id', $user->id)
+            ->whereIn('statut', ['actif', 'termine'])
+            ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                $query->whereHas('classe', function ($q) use ($selectedAnneeId) {
+                    $q->where('annee_scolaire_id', $selectedAnneeId);
+                });
+            })
+            ->pluck('classe_id')
+            ->unique();
+
+        $classes = Classe::with([
+                'anneeScolaire',
+                'enseignantPrincipal',
+                'affectations' => function ($query) use ($user) {
+                    $query->where('user_id', $user->id)
+                        ->whereIn('statut', ['actif', 'termine'])
+                        ->with('matiere');
+                },
+            ])
+            ->withCount([
+                'inscriptions' => function ($query) {
+                    $query->where('statut', 'actif');
+                },
+            ])
+            ->whereIn('id', $classeIds)
+            ->orderBy('niveau')
+            ->orderBy('nom')
+            ->get();
+
+        return view('classes.mes_classes', compact(
+            'classes',
+            'annees',
+            'selectedAnneeId'
+        ));
+    }
+
+    /**
+     * Affiche le détail d'une classe affectée à l'enseignant connecté.
+     */
+    public function showEnseignant(Classe $classe)
+    {
+        $this->verifierClasseEnseignant($classe);
+
+        $classe->load([
+            'anneeScolaire',
+            'enseignantPrincipal',
+            'chefClasse',
+            'affectations' => function ($query) {
+                $query->where('user_id', Auth::id())
+                    ->whereIn('statut', ['actif', 'termine'])
+                    ->with(['enseignant', 'matiere']);
+            },
+        ]);
+
+        $inscriptions = $this->inscriptionsClasse($classe);
+
+        $retourUrl = route('enseignant.classes.index', [
+            'annee_scolaire_id' => $classe->annee_scolaire_id,
+        ]);
+        $pdfUrl = route('enseignant.classes.eleves-pdf', $classe);
+        [$planningUrl, $planningPdfUrl] = $this->liensPlanningClasse($classe);
+        $affectationsTitre = 'Mes matières dans cette classe';
+
+        return view('classes.show', compact(
+            'classe',
+            'inscriptions',
+            'retourUrl',
+            'pdfUrl',
+            'planningUrl',
+            'planningPdfUrl',
+            'affectationsTitre'
+        ));
+    }
+
+    /**
+     * Génère la liste PDF des élèves d'une classe.
+     */
+    public function imprimerEleves(Classe $classe)
+    {
+        if (Auth::user()?->estEnseignant()) {
+            $this->verifierClasseEnseignant($classe);
+        }
+
+        $classe->load([
+            'anneeScolaire',
+            'enseignantPrincipal',
+            'chefClasse',
+        ]);
+
+        $inscriptions = $this->inscriptionsClasse($classe);
+
+        $pdf = Pdf::loadView('pdf.liste_eleves_classe', [
+            'classe' => $classe,
+            'inscriptions' => $inscriptions,
+        ]);
+
+        return $pdf->download('liste-eleves-' . str_replace(' ', '-', strtolower($classe->nom)) . '.pdf');
     }
 
     /**
@@ -256,5 +409,63 @@ class ClasseController extends Controller
         return redirect()
             ->route('classes.index')
             ->with('success', 'Classe supprimée avec succès.');
+    }
+
+    private function inscriptionsClasse(Classe $classe)
+    {
+        return $classe->inscriptions()
+            ->with('eleve')
+            ->join('eleves', 'inscriptions.eleve_id', '=', 'eleves.id')
+            ->orderBy('eleves.nom')
+            ->orderBy('eleves.prenom')
+            ->select('inscriptions.*')
+            ->get();
+    }
+
+    private function verifierClasseEnseignant(Classe $classe): void
+    {
+        $autorise = ClasseMatiereUser::where('user_id', Auth::id())
+            ->where('classe_id', $classe->id)
+            ->whereIn('statut', ['actif', 'termine'])
+            ->exists();
+
+        if (! $autorise) {
+            abort(403, 'Accès refusé.');
+        }
+    }
+
+    private function liensPlanningClasse(Classe $classe): array
+    {
+        $classe->loadMissing('anneeScolaire');
+
+        $semaine = now()->startOfDay();
+        $annee = $classe->anneeScolaire;
+
+        if ($annee?->date_debut && $semaine->lt($annee->date_debut)) {
+            $semaine = $annee->date_debut->copy();
+        }
+
+        if ($annee?->date_fin && $semaine->gt($annee->date_fin)) {
+            $semaine = $annee->date_fin->copy();
+        }
+
+        $params = [
+            'annee_scolaire_id' => $classe->annee_scolaire_id,
+            'classe_id' => $classe->id,
+            'semaine' => $semaine->toDateString(),
+        ];
+
+        return [
+            route('emplois-du-temps.semaine-classe', $params),
+            route('emplois-du-temps.semaine-classe-pdf', $params),
+        ];
+    }
+
+    private function anneeScolaireCourante(): ?AnneeScolaire
+    {
+        return AnneeScolaire::where('statut', 'active')
+            ->orderByDesc('date_debut')
+            ->first()
+            ?? AnneeScolaire::orderByDesc('date_debut')->first();
     }
 }

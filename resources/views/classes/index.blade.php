@@ -57,7 +57,13 @@
             {{-- Condition : ! $creationVerrouillee. --}}
             @if (! $creationVerrouillee)
                 <p>
-                    <a href="{{ route('classes.create') }}" class="btn btn-primary">
+                    <a
+                        href="{{ route('classes.create', [
+                            'annee_scolaire_id' => $selectedAnneeId,
+                            'niveau' => $selectedNiveau,
+                        ]) }}"
+                        class="btn btn-primary"
+                    >
                         Ajouter une classe
                     </a>
                 </p>

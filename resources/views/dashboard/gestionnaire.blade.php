@@ -2,6 +2,33 @@
 {{-- Vue Blade : resources/views/dashboard/gestionnaire.blade.php --}}
     <div class="container">
         <h1>Tableau de bord gestionnaire</h1>
+
+        <div class="card">
+            <form action="{{ route('dashboard') }}" method="GET" class="filter-form filter-form-large">
+                <div class="form-group">
+                    <label class="form-label">Année scolaire</label>
+                    <select name="annee_scolaire_id" class="form-control">
+                        {{-- Remplit la liste des annees scolaires. --}}
+                        @foreach ($annees as $anneeOption)
+                            <option value="{{ $anneeOption->id }}" @selected((string) $selectedAnneeId === (string) $anneeOption->id)>
+                                {{ $anneeOption->libelle }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">
+                        Afficher
+                    </button>
+
+                    <a href="{{ route('dashboard') }}" class="btn">
+                        Réinitialiser
+                    </a>
+                </div>
+            </form>
+        </div>
+
         <div class="school-info-card">
         <div class="school-info-logo">
             BZ

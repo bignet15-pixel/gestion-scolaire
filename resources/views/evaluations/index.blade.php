@@ -71,6 +71,21 @@
                     </select>
                 </div>
 
+                <div class="form-group">
+                    <label class="form-label">Type</label>
+
+                    <select name="type" class="form-control">
+                        <option value="">Tous les types</option>
+
+                        {{-- Remplit la liste des types d evaluation. --}}
+                        @foreach ($types as $type)
+                            <option value="{{ $type }}" @selected($selectedType === $type)>
+                                {{ ucfirst($type) }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
                 <div class="filter-actions">
                     <button type="submit" class="btn btn-primary">
                         Filtrer
@@ -85,7 +100,14 @@
             {{-- Condition : ! $creationVerrouillee. --}}
             @if (! $creationVerrouillee)
                 <p>
-                    <a href="{{ route('evaluations.create') }}" class="btn btn-primary">
+                    <a
+                        href="{{ route('evaluations.create', [
+                            'annee_scolaire_id' => $selectedAnneeId,
+                            'classe_id' => $selectedClasseId,
+                            'trimestre_id' => $selectedTrimestreId,
+                        ]) }}"
+                        class="btn btn-primary"
+                    >
                         Ajouter une évaluation
                     </a>
                 </p>

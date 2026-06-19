@@ -22,7 +22,13 @@
             {{-- Condition : ! $creationVerrouillee. --}}
             @if (! $creationVerrouillee)
                 <p>
-                    <a href="{{ route('emplois-du-temps.create') }}" class="btn btn-primary">
+                    <a
+                        href="{{ route('emplois-du-temps.create', [
+                            'annee_scolaire_id' => $selectedAnneeId,
+                            'semaine' => $dateReference->format('Y-m-d'),
+                        ]) }}"
+                        class="btn btn-primary"
+                    >
                         Ajouter un créneau
                     </a>
                 </p>
@@ -35,7 +41,7 @@
                 </div>
             @endif
 
-            <form action="{{ route('emplois-du-temps.index') }}" method="GET">
+            <form action="{{ route('emplois-du-temps.index') }}" method="GET" class="filter-form filter-form-large">
                 <div class="form-group">
                     <label class="form-label">Année scolaire</label>
                     <select name="annee_scolaire_id" class="form-control">
@@ -78,24 +84,36 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-primary">
-                    Filtrer
-                </button>
+                <div class="form-group">
+                    <label class="form-label">Semaine</label>
+                    <input type="date" name="semaine" class="form-control" value="{{ $dateReference->format('Y-m-d') }}">
+                </div>
 
-                <a href="{{ route('emplois-du-temps.index') }}" class="btn">
-                    Réinitialiser
-                </a>
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">
+                        Filtrer
+                    </button>
+
+                    <a href="{{ route('emplois-du-temps.index') }}" class="btn">
+                        Réinitialiser
+                    </a>
+                </div>
             </form>
         </div>
 
         <div class="card">
-            <h2>Liste des créneaux</h2>
+            <h2>
+                Liste des créneaux —
+                semaine du {{ $debutSemaine->format('d/m/Y') }}
+                au {{ $finSemaine->format('d/m/Y') }}
+            </h2>
 
             <table class="table">
                 <thead>
                     <tr>
                         <th>Jour</th>
                         <th>Heure</th>
+                        <th>Semaine</th>
                         <th>Année</th>
                         <th>Classe</th>
                         <th>Matière</th>
@@ -122,6 +140,15 @@
                                 {{ $emploi->heure_fin->format('H:i') }}
                             </td>
 
+                            <td>
+                                @if ($emploi->date_fin)
+                                    du {{ $emploi->date_debut?->format('d/m/Y') ?? '-' }}
+                                    au {{ $emploi->date_fin->format('d/m/Y') }}
+                                @else
+                                    Depuis le {{ $emploi->date_debut?->format('d/m/Y') ?? '-' }}
+                                @endif
+                            </td>
+
                             <td>{{ $emploi->affectation?->classe?->anneeScolaire?->libelle ?? '-' }}</td>
                             <td>{{ $emploi->affectation?->classe?->nom ?? 'Affectation introuvable' }}</td>
                             <td>{{ $emploi->affectation?->matiere?->nom ?? '-' }}</td>
@@ -135,17 +162,31 @@
 
                                 {{-- Condition : ! $verrouille. --}}
                                 @if (! $verrouille)
-                                    <a href="{{ route('emplois-du-temps.edit', $emploi) }}" class="btn btn-primary">
+                                    <a
+                                        href="{{ route('emplois-du-temps.edit', [
+                                            'emploi_du_temps' => $emploi,
+                                            'annee_scolaire_id' => $selectedAnneeId,
+                                            'semaine' => $dateReference->format('Y-m-d'),
+                                        ]) }}"
+                                        class="btn btn-primary"
+                                    >
                                         Modifier
                                     </a>
 
-                                    <form action="{{ route('emplois-du-temps.destroy', $emploi) }}" method="POST" style="display:inline;">
+                                    <form
+                                        action="{{ route('emplois-du-temps.destroy', $emploi) }}"
+                                        method="POST"
+                                        style="display:inline;"
+                                        data-confirm="Voulez-vous vraiment supprimer ce créneau ?"
+                                        data-confirm-title="Suppression d’un créneau"
+                                        data-confirm-button="Supprimer"
+                                    >
                                         {{-- Jeton de securite du formulaire. --}}
                                         @csrf
                                         {{-- Methode HTTP du formulaire. --}}
                                         @method('DELETE')
 
-                                        <button type="submit" class="btn btn-danger" onclick="return confirm('Supprimer ce créneau ?')">
+                                        <button type="submit" class="btn btn-danger">
                                             Supprimer
                                         </button>
                                     </form>
@@ -158,7 +199,7 @@
                     {{-- Message affiche quand la liste est vide. --}}
                     @empty
                         <tr>
-                            <td colspan="8">Aucun créneau trouvé.</td>
+                            <td colspan="9">Aucun créneau trouvé.</td>
                         </tr>
                     @endforelse
                 </tbody>

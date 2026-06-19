@@ -111,11 +111,29 @@
                         <a href="{{ route('resultats.index') }}" class="sidebar-link{{ $active('resultats.*') }}">
                             Résultats
                         </a>
+
+                        <div class="sidebar-section">Assiduité & discipline</div>
+
+                        <a href="{{ route('absences-retards.index') }}" class="sidebar-link{{ $active('absences-retards.*') }}">
+                            Absences et retards
+                        </a>
+
+                        <a href="{{ route('sanctions.index') }}" class="sidebar-link{{ $active('sanctions.*') }}">
+                            Sanctions
+                        </a>
+
+                        <a href="{{ route('sanctions-appliquees.index') }}" class="sidebar-link{{ $active('sanctions-appliquees.*') }}">
+                            Sanctions appliquées
+                        </a>
                     @endif
 
                     {{-- Condition : auth()->user()->estEnseignant(). --}}
                     @if (auth()->user()->estEnseignant())
                         <div class="sidebar-section">Espace enseignant</div>
+
+                        <a href="{{ route('enseignant.classes.index') }}" class="sidebar-link{{ $active('enseignant.classes.*') }}">
+                            Mes classes
+                        </a>
 
                         <a href="{{ route('evaluations.index') }}" class="sidebar-link{{ $active('evaluations.*') }}">
                             Mes évaluations
@@ -131,6 +149,14 @@
 
                         <a href="{{ route('resultats.index') }}" class="sidebar-link{{ $active('resultats.*') }}">
                             Moyennes / Classements
+                        </a>
+
+                        <a href="{{ route('absences-retards.index') }}" class="sidebar-link{{ $active('absences-retards.*') }}">
+                            Absences et retards
+                        </a>
+
+                        <a href="{{ route('sanctions-appliquees.index') }}" class="sidebar-link{{ $active('sanctions-appliquees.*') }}">
+                            Sanctions appliquées
                         </a>
                     @endif
                 @endauth

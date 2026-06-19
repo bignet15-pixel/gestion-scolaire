@@ -45,4 +45,111 @@ class Trimestre extends Model
     {
         return $this->statut === 'ferme';
     }
+
+    public function statutPedagogique(): string
+    {
+        if ($this->estFerme()) {
+            return 'passe';
+        }
+
+        $aujourdhui = now()->startOfDay();
+
+        if (! $this->date_debut || $aujourdhui->lt($this->date_debut->copy()->startOfDay())) {
+            return 'pas_encore_programme';
+        }
+
+        return 'en_cours';
+    }
+
+    public function libelleStatutPedagogique(): string
+    {
+        return match ($this->statutPedagogique()) {
+            'passe' => 'Passé',
+            'en_cours' => 'En cours',
+            default => 'Pas encore programmé',
+        };
+    }
+
+    public function badgeStatutPedagogique(): string
+    {
+        return match ($this->statutPedagogique()) {
+            'passe' => 'badge-success',
+            'en_cours' => 'badge-warning',
+            default => 'badge-muted',
+        };
+    }
+
+    public static function fermerTrimestresArrives(): int
+    {
+        $trimestres = static::query()
+            ->where('statut', 'actif')
+            ->whereNotNull('date_fin')
+            ->whereDate('date_fin', '<=', now()->toDateString())
+            ->get();
+
+        $nombreFermes = 0;
+
+        foreach ($trimestres as $trimestre) {
+            if (! $trimestre->peutEtreFerme()) {
+                continue;
+            }
+
+            $trimestre->update([
+                'statut' => 'ferme',
+            ]);
+
+            $nombreFermes++;
+        }
+
+        return $nombreFermes;
+    }
+
+    public function peutEtreFerme(): bool
+    {
+        return $this->nombreNotesManquantes() === 0;
+    }
+
+    public function nombreNotesManquantes(): int
+    {
+        $evaluations = $this->evaluations()
+            ->select(['id', 'classe_id', 'trimestre_id'])
+            ->get();
+
+        $totalManquant = 0;
+
+        foreach ($evaluations as $evaluation) {
+            $nombreEleves = Inscription::where('classe_id', $evaluation->classe_id)
+                ->where('annee_scolaire_id', $this->annee_scolaire_id)
+                ->where('statut', 'actif')
+                ->count();
+
+            if ($nombreEleves === 0) {
+                continue;
+            }
+
+            $nombreNotesSaisies = Note::where('evaluation_id', $evaluation->id)
+                ->whereNotNull('valeur')
+                ->whereHas('inscription', function ($query) use ($evaluation) {
+                    $query->where('classe_id', $evaluation->classe_id)
+                        ->where('annee_scolaire_id', $this->annee_scolaire_id)
+                        ->where('statut', 'actif');
+                })
+                ->count();
+
+            $totalManquant += max(0, $nombreEleves - $nombreNotesSaisies);
+        }
+
+        return $totalManquant;
+    }
+
+    public function messageBlocageFermeture(): ?string
+    {
+        $nombreNotesManquantes = $this->nombreNotesManquantes();
+
+        if ($nombreNotesManquantes === 0) {
+            return null;
+        }
+
+        return 'Impossible de fermer ce trimestre : ' . $nombreNotesManquantes . ' note(s) attendue(s) ne sont pas encore saisie(s).';
+    }
 }

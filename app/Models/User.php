@@ -60,6 +60,31 @@ class User extends Authenticatable
         return $this->hasMany(Paiement::class);
     }
 
+    public function absencesRetardsEnregistres()
+    {
+        return $this->hasMany(AbsenceRetard::class, 'enregistre_par');
+    }
+
+    public function absencesRetardsStatutMisAJour()
+    {
+        return $this->hasMany(AbsenceRetard::class, 'statut_mis_a_jour_par');
+    }
+
+    public function sanctionsCreees()
+    {
+        return $this->hasMany(Sanction::class, 'created_by');
+    }
+
+    public function sanctionsAppliquees()
+    {
+        return $this->hasMany(SanctionAppliquee::class, 'applique_par');
+    }
+
+    public function decisionsSanctions()
+    {
+        return $this->hasMany(SanctionAppliquee::class, 'decision_par');
+    }
+
     public function estGestionnaire(): bool
     {
         return $this->role === 'gestionnaire';

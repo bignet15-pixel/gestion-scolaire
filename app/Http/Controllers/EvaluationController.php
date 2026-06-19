@@ -27,8 +27,14 @@ class EvaluationController extends Controller
         $selectedAnneeId = $request->input('annee_scolaire_id');
         $selectedClasseId = $request->input('classe_id');
         $selectedTrimestreId = $request->input('trimestre_id');
+        $selectedType = $request->input('type');
+        $types = ['composition', 'test', 'devoir', 'interrogation'];
 
         $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+
+        if (! $selectedAnneeId && $annees->isNotEmpty()) {
+            $selectedAnneeId = $this->anneeScolaireCourante()?->id ?? $annees->first()->id;
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -49,7 +55,12 @@ class EvaluationController extends Controller
 
         if ($user->estEnseignant()) {
             $classeIds = ClasseMatiereUser::where('user_id', $user->id)
-                ->where('statut', 'actif')
+                ->whereIn('statut', ['actif', 'termine'])
+                ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                    $query->whereHas('classe', function ($q) use ($selectedAnneeId) {
+                        $q->where('annee_scolaire_id', $selectedAnneeId);
+                    });
+                })
                 ->pluck('classe_id')
                 ->unique();
 
@@ -98,6 +109,9 @@ class EvaluationController extends Controller
             })
             ->when($selectedTrimestreId, function ($query) use ($selectedTrimestreId) {
                 $query->where('trimestre_id', $selectedTrimestreId);
+            })
+            ->when($selectedType, function ($query) use ($selectedType) {
+                $query->where('type', $selectedType);
             });
 
         /*
@@ -117,7 +131,7 @@ class EvaluationController extends Controller
                     ->whereColumn('classe_matiere_users.classe_id', 'evaluations.classe_id')
                     ->whereColumn('classe_matiere_users.matiere_id', 'evaluations.matiere_id')
                     ->where('classe_matiere_users.user_id', $user->id)
-                    ->where('classe_matiere_users.statut', 'actif')
+                    ->whereIn('classe_matiere_users.statut', ['actif', 'termine'])
                     ->whereNull('classe_matiere_users.deleted_at');
             });
         }
@@ -134,41 +148,92 @@ class EvaluationController extends Controller
             'trimestres',
             'selectedAnneeId',
             'selectedClasseId',
-            'selectedTrimestreId'
+            'selectedTrimestreId',
+            'selectedType',
+            'types'
         ));
     }
 
     /**
      * Affiche le formulaire de création.
      */
-    public function create()
+    public function create(Request $request)
     {
         $user = Auth::user();
+        $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+        $selectedAnneeId = $request->filled('annee_scolaire_id')
+            ? $request->input('annee_scolaire_id')
+            : $this->anneeScolaireCourante()?->id;
+        $annee = $annees->first(
+            fn ($anneeOption) => (string) $anneeOption->id === (string) $selectedAnneeId
+        );
 
-        if ($user->estGestionnaire()) {
-            $classes = Classe::with('anneeScolaire')
-                ->orderBy('annee_scolaire_id')
+        if (! $annee && $annees->isNotEmpty()) {
+            $annee = $annees->first();
+            $selectedAnneeId = $annee->id;
+        }
+
+        $affectationsQuery = ClasseMatiereUser::with([
+                'classe.anneeScolaire',
+                'matiere',
+            ])
+            ->where('statut', 'actif')
+            ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                $query->whereHas('classe', function ($q) use ($selectedAnneeId) {
+                    $q->where('annee_scolaire_id', $selectedAnneeId);
+                });
+            });
+
+        if ($user->estEnseignant()) {
+            $affectationsQuery->where('user_id', $user->id);
+        }
+
+        $affectationsDisponibles = $affectationsQuery
+            ->orderBy('classe_id')
+            ->get();
+
+        $classes = $user->estGestionnaire()
+            ? Classe::with('anneeScolaire')
+                ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                    $query->where('annee_scolaire_id', $selectedAnneeId);
+                })
                 ->orderBy('niveau')
                 ->orderBy('nom')
-                ->get();
-
-            $matieres = Matiere::orderBy('nom')->get();
-
-            $types = ['composition', 'test'];
-        } else {
-            $affectations = ClasseMatiereUser::with([
-                    'classe.anneeScolaire',
-                    'matiere',
-                ])
-                ->where('user_id', $user->id)
-                ->where('statut', 'actif')
-                ->get();
-
-            $classes = $affectations
+                ->get()
+            : $affectationsDisponibles
                 ->pluck('classe')
                 ->unique('id')
                 ->values();
 
+        $selectedClasseId = $request->filled('classe_id')
+            ? $request->input('classe_id')
+            : $classes->first()?->id;
+
+        if (! $classes->contains(fn ($classe) => (string) $classe->id === (string) $selectedClasseId)) {
+            $selectedClasseId = $classes->first()?->id;
+        }
+
+        $selectedClasse = $classes->first(
+            fn ($classe) => (string) $classe->id === (string) $selectedClasseId
+        );
+
+        $affectations = $affectationsDisponibles
+            ->when($selectedClasseId, function ($collection) use ($selectedClasseId) {
+                return $collection
+                    ->where('classe_id', $selectedClasseId)
+                    ->values();
+            });
+
+        if ($user->estGestionnaire()) {
+            $matieres = $affectations
+                ->pluck('matiere')
+                ->filter()
+                ->unique('id')
+                ->sortBy('nom')
+                ->values();
+
+            $types = ['composition', 'test'];
+        } else {
             $matieres = $affectations
                 ->pluck('matiere')
                 ->unique('id')
@@ -178,14 +243,33 @@ class EvaluationController extends Controller
         }
 
         $trimestres = Trimestre::with('anneeScolaire')
+            ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
+                $query->where('annee_scolaire_id', $selectedAnneeId);
+            })
+            ->where('statut', 'actif')
+            ->whereHas('anneeScolaire', function ($query) {
+                $query->where('statut', 'active');
+            })
             ->orderByDesc('date_debut')
             ->get();
 
+        $selectedTrimestreId = $request->filled('trimestre_id')
+            && $trimestres->contains(fn ($trimestre) => (string) $trimestre->id === (string) $request->input('trimestre_id'))
+                ? $request->input('trimestre_id')
+                : $trimestres->first()?->id;
+
         return view('evaluations.create', compact(
+            'annees',
             'classes',
             'matieres',
             'trimestres',
-            'types'
+            'types',
+            'affectations',
+            'annee',
+            'selectedClasse',
+            'selectedAnneeId',
+            'selectedClasseId',
+            'selectedTrimestreId'
         ));
     }
 
@@ -200,21 +284,56 @@ class EvaluationController extends Controller
             ? ['composition', 'test']
             : ['devoir', 'interrogation'];
 
-        $validated = $request->validate([
-            'classe_id' => ['required', 'exists:classes,id'],
-            'matiere_id' => ['required', 'exists:matieres,id'],
+        $rules = [
+            'annee_scolaire_id' => ['required', 'exists:annee_scolaires,id'],
             'trimestre_id' => ['required', 'exists:trimestres,id'],
             'nom' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::in($typesAutorises)],
             'date_evaluation' => ['required', 'date'],
             'heure_debut' => ['required', 'date_format:H:i'],
             'heure_fin' => ['required', 'date_format:H:i', 'after:heure_debut'],
-            'coefficient' => ['required', 'numeric', 'min:0.1', 'max:20'],
+            'coefficient' => ['nullable', 'numeric', 'min:0.1', 'max:20'],
             'bareme' => ['required', 'numeric', 'min:1', 'max:100'],
-        ]);
+        ];
+
+        if ($user->estEnseignant()) {
+            $rules['affectation_id'] = ['required', 'exists:classe_matiere_users,id'];
+        } else {
+            $rules['classe_id'] = ['required', 'exists:classes,id'];
+            $rules['matiere_id'] = ['required', 'exists:matieres,id'];
+        }
+
+        $validated = $request->validate($rules);
+
+        if ($user->estEnseignant()) {
+            $affectation = ClasseMatiereUser::where('id', $validated['affectation_id'])
+                ->where('user_id', $user->id)
+                ->where('statut', 'actif')
+                ->firstOrFail();
+
+            $validated['classe_id'] = $affectation->classe_id;
+            $validated['matiere_id'] = $affectation->matiere_id;
+            unset($validated['affectation_id']);
+        }
 
         $classe = Classe::findOrFail($validated['classe_id']);
         $trimestre = Trimestre::with('anneeScolaire')->findOrFail($validated['trimestre_id']);
+
+        if ((int) $classe->annee_scolaire_id !== (int) $validated['annee_scolaire_id']) {
+            return back()
+                ->withErrors([
+                    'classe_id' => 'La classe choisie ne correspond pas à l’année scolaire sélectionnée.',
+                ])
+                ->withInput();
+        }
+
+        if ((int) $trimestre->annee_scolaire_id !== (int) $validated['annee_scolaire_id']) {
+            return back()
+                ->withErrors([
+                    'trimestre_id' => 'Le trimestre choisi ne correspond pas à l’année scolaire sélectionnée.',
+                ])
+                ->withInput();
+        }
 
         if ($classe->anneeScolaire?->estFermee() || $trimestre->anneeScolaire?->estFermee()) {
             return back()
@@ -238,22 +357,6 @@ class EvaluationController extends Controller
                     'trimestre_id' => 'Le trimestre choisi n’appartient pas à la même année scolaire que la classe.',
                 ])
                 ->withInput();
-        }
-
-        if ($user->estEnseignant()) {
-            $autorise = ClasseMatiereUser::where('user_id', $user->id)
-                ->where('classe_id', $validated['classe_id'])
-                ->where('matiere_id', $validated['matiere_id'])
-                ->where('statut', 'actif')
-                ->exists();
-
-            if (! $autorise) {
-                return back()
-                    ->withErrors([
-                        'classe_id' => 'Vous n’êtes pas affecté à cette classe et cette matière.',
-                    ])
-                    ->withInput();
-            }
         }
 
         $existe = Evaluation::where('classe_id', $validated['classe_id'])
@@ -287,10 +390,17 @@ class EvaluationController extends Controller
         
         $validated['coefficient'] = $coefficient;
 
+        unset($validated['annee_scolaire_id']);
+
         Evaluation::create($validated);
 
         return redirect()
-            ->route('evaluations.index')
+            ->route('evaluations.index', [
+                'annee_scolaire_id' => $classe->annee_scolaire_id,
+                'classe_id' => $classe->id,
+                'trimestre_id' => $trimestre->id,
+                'type' => $validated['type'],
+            ])
             ->with('success', 'Évaluation créée avec succès.');
     }
 
@@ -358,7 +468,18 @@ class EvaluationController extends Controller
         $this->verifierAccesEvaluation($evaluation);
         $this->verifierModificationEvaluation($evaluation);
 
+        if ($this->evaluationEstVerrouillee($evaluation)) {
+            return redirect()
+                ->route('evaluations.show', $evaluation)
+                ->withErrors([
+                    'evaluation' => 'Impossible de modifier cette évaluation : son trimestre ou son année scolaire est fermé.',
+                ]);
+        }
+
         $user = Auth::user();
+        $evaluation->loadMissing('classe.anneeScolaire');
+        $annee = $evaluation->classe?->anneeScolaire ?? $this->anneeScolaireCourante();
+        $affectations = collect();
 
         if ($user->estGestionnaire()) {
             $classes = Classe::with('anneeScolaire')
@@ -377,6 +498,12 @@ class EvaluationController extends Controller
                 ])
                 ->where('user_id', $user->id)
                 ->where('statut', 'actif')
+                ->when($annee, function ($query) use ($annee) {
+                    $query->whereHas('classe', function ($q) use ($annee) {
+                        $q->where('annee_scolaire_id', $annee->id);
+                    });
+                })
+                ->orderBy('classe_id')
                 ->get();
 
             $classes = $affectations
@@ -393,6 +520,9 @@ class EvaluationController extends Controller
         }
 
         $trimestres = Trimestre::with('anneeScolaire')
+            ->when($user->estEnseignant() && $annee, function ($query) use ($annee) {
+                $query->where('annee_scolaire_id', $annee->id);
+            })
             ->orderByDesc('date_debut')
             ->get();
 
@@ -401,7 +531,9 @@ class EvaluationController extends Controller
             'classes',
             'matieres',
             'trimestres',
-            'types'
+            'types',
+            'affectations',
+            'annee'
         ));
     }
 
@@ -425,18 +557,36 @@ class EvaluationController extends Controller
             ? ['composition', 'test']
             : ['devoir', 'interrogation'];
 
-        $validated = $request->validate([
-            'classe_id' => ['required', 'exists:classes,id'],
-            'matiere_id' => ['required', 'exists:matieres,id'],
+        $rules = [
             'trimestre_id' => ['required', 'exists:trimestres,id'],
             'nom' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::in($typesAutorises)],
             'date_evaluation' => ['required', 'date'],
             'heure_debut' => ['required', 'date_format:H:i'],
             'heure_fin' => ['required', 'date_format:H:i', 'after:heure_debut'],
-            'coefficient' => ['required', 'numeric', 'min:0.1', 'max:20'],
+            'coefficient' => ['nullable', 'numeric', 'min:0.1', 'max:20'],
             'bareme' => ['required', 'numeric', 'min:1', 'max:100'],
-        ]);
+        ];
+
+        if ($user->estEnseignant()) {
+            $rules['affectation_id'] = ['required', 'exists:classe_matiere_users,id'];
+        } else {
+            $rules['classe_id'] = ['required', 'exists:classes,id'];
+            $rules['matiere_id'] = ['required', 'exists:matieres,id'];
+        }
+
+        $validated = $request->validate($rules);
+
+        if ($user->estEnseignant()) {
+            $affectation = ClasseMatiereUser::where('id', $validated['affectation_id'])
+                ->where('user_id', $user->id)
+                ->where('statut', 'actif')
+                ->firstOrFail();
+
+            $validated['classe_id'] = $affectation->classe_id;
+            $validated['matiere_id'] = $affectation->matiere_id;
+            unset($validated['affectation_id']);
+        }
 
         $classe = Classe::findOrFail($validated['classe_id']);
         $trimestre = Trimestre::with('anneeScolaire')->findOrFail($validated['trimestre_id']);
@@ -463,22 +613,6 @@ class EvaluationController extends Controller
                     'trimestre_id' => 'Le trimestre choisi n’appartient pas à la même année scolaire que la classe.',
                 ])
                 ->withInput();
-        }
-
-        if ($user->estEnseignant()) {
-            $autorise = ClasseMatiereUser::where('user_id', $user->id)
-                ->where('classe_id', $validated['classe_id'])
-                ->where('matiere_id', $validated['matiere_id'])
-                ->where('statut', 'actif')
-                ->exists();
-
-            if (! $autorise) {
-                return back()
-                    ->withErrors([
-                        'classe_id' => 'Vous n’êtes pas affecté à cette classe et cette matière.',
-                    ])
-                    ->withInput();
-            }
         }
 
         $existe = Evaluation::where('classe_id', $validated['classe_id'])
@@ -565,7 +699,7 @@ class EvaluationController extends Controller
         $autorise = ClasseMatiereUser::where('user_id', $user->id)
             ->where('classe_id', $evaluation->classe_id)
             ->where('matiere_id', $evaluation->matiere_id)
-            ->where('statut', 'actif')
+            ->whereIn('statut', ['actif', 'termine'])
             ->exists();
 
         if (! $autorise) {
@@ -635,6 +769,14 @@ class EvaluationController extends Controller
         }
 
         return (float) $affectation->coefficient;
+    }
+
+    private function anneeScolaireCourante(): ?AnneeScolaire
+    {
+        return AnneeScolaire::where('statut', 'active')
+            ->orderByDesc('date_debut')
+            ->first()
+            ?? AnneeScolaire::orderByDesc('date_debut')->first();
     }
 
 }

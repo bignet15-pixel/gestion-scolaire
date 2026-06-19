@@ -316,6 +316,42 @@ hr {
     object-fit: cover;
 }
 
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.table-responsive > .table {
+    min-width: 900px;
+}
+
+.table-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+
+.table-actions form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.table-actions .btn {
+    margin: 0;
+    white-space: nowrap;
+}
+
+.table td:last-child {
+    vertical-align: middle;
+}
+
+.table td:last-child .btn,
+.table td:last-child form {
+    display: inline-flex;
+    vertical-align: middle;
+}
+
 /* Formulaires */
 
 .form-group {
@@ -451,6 +487,26 @@ small {
     color: #92400e;
 }
 
+.badge-muted {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+[data-assiduite-absence-only][hidden],
+[data-assiduite-retard-only][hidden],
+[data-sanction-automatique][hidden],
+[data-sanction-valeur][hidden] {
+    display: none !important;
+}
+
+.assiduite-summary .stat-card {
+    padding: 16px;
+}
+
+.assiduite-summary .stat-value {
+    font-size: 26px;
+}
+
 /* Mise en évidence des évaluations dans planning */
 
 .evaluation-box {
@@ -459,6 +515,251 @@ small {
     color: #78350f;
     padding: 8px;
     border-radius: 10px;
+}
+
+/* Grille horaire des plannings */
+
+.planning-grid-table {
+    table-layout: fixed;
+    border: 1px solid #cbd5e1;
+}
+
+.planning-grid-table th {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.planning-grid-table th,
+.planning-grid-table td {
+    border-left: 1px solid #dbe2ea;
+    border-right: 1px solid #dbe2ea;
+}
+
+.planning-grid-table th:first-child,
+.planning-grid-table td:first-child {
+    border-left: 0;
+}
+
+.planning-grid-table th:last-child,
+.planning-grid-table td:last-child {
+    border-right: 0;
+}
+
+.planning-hour-column {
+    width: 130px;
+}
+
+.planning-date {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #dbeafe;
+}
+
+.planning-time-cell {
+    background: #eff6ff;
+    color: var(--primary-dark);
+    font-weight: 800;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.planning-grid-cell {
+    vertical-align: top;
+    height: 86px;
+    padding: 8px;
+}
+
+.planning-cell-item {
+    display: grid;
+    gap: 2px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
+    color: var(--primary-dark);
+    white-space: normal;
+}
+
+.planning-cell-item + .planning-cell-item {
+    margin-top: 7px;
+}
+
+.planning-cell-item strong,
+.planning-cell-item span,
+.planning-cell-item small {
+    display: block;
+}
+
+.planning-cell-item small {
+    margin-top: 0;
+    color: #4b5563;
+    font-size: 11px;
+}
+
+.planning-cell-evaluation {
+    color: #78350f;
+}
+
+.planning-break-cell {
+    background: #fef3c7;
+    color: #92400e;
+    text-align: center;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    height: 44px;
+}
+
+.planning-empty-cell {
+    background: #ffffff;
+    color: transparent;
+    height: 44px;
+}
+
+.planning-cell-empty {
+    color: #cbd5e1;
+}
+
+.planning-detail-title {
+    margin-top: 24px;
+}
+
+.planning-detail-table {
+    margin-top: 10px;
+}
+
+.planning-mobile-list {
+    display: none;
+}
+
+.planning-mobile-day {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--white);
+}
+
+.planning-mobile-day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 14px;
+    background: var(--primary);
+    color: var(--white);
+}
+
+.planning-mobile-day-header h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.planning-mobile-day-header span {
+    font-size: 12px;
+    font-weight: 800;
+    color: #dbeafe;
+    white-space: nowrap;
+}
+
+.planning-mobile-items {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+}
+
+.planning-mobile-item {
+    border: 1px solid #dbe2ea;
+    border-radius: 10px;
+    padding: 12px;
+    background: #ffffff;
+}
+
+.planning-mobile-evaluation {
+    border-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.planning-mobile-item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.planning-mobile-time {
+    color: var(--primary-dark);
+    font-weight: 900;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.planning-mobile-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.planning-mobile-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.planning-mobile-badge-evaluation {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.planning-mobile-badge-warning {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.planning-mobile-subject {
+    display: block;
+    color: var(--primary-dark);
+    font-size: 16px;
+    margin-bottom: 10px;
+}
+
+.planning-mobile-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 7px;
+    border-top: 1px solid #eef2f7;
+    font-size: 13px;
+}
+
+.planning-mobile-meta + .planning-mobile-meta {
+    margin-top: 7px;
+}
+
+.planning-mobile-meta span {
+    color: var(--muted);
+    font-weight: 800;
+}
+
+.planning-mobile-meta strong {
+    color: #111827;
+    text-align: right;
+}
+
+.planning-mobile-empty {
+    padding: 12px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    color: var(--muted);
+    font-weight: 700;
+    text-align: center;
 }
 
 /* Responsive */
@@ -515,6 +816,15 @@ small {
         display: block;
         overflow-x: auto;
         white-space: nowrap;
+    }
+
+    .planning-grid-table {
+        display: none;
+    }
+
+    .planning-mobile-list {
+        display: grid;
+        gap: 14px;
     }
 }
 
@@ -983,6 +1293,56 @@ small {
     flex-wrap: wrap;
 }
 
+.detail-text-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 28px;
+    margin-top: 24px;
+    border-top: 1px solid var(--border);
+}
+
+.detail-text-section {
+    min-width: 0;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.detail-text-section-wide {
+    grid-column: 1 / -1;
+}
+
+.detail-text-section h2 {
+    margin: 0 0 8px;
+    font-size: 15px;
+}
+
+.detail-text-section p {
+    margin: 0;
+    color: #374151;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.detail-footer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-top: 18px;
+}
+
+.detail-footer-actions form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.detail-footer-actions .btn {
+    margin: 0;
+    white-space: nowrap;
+}
+
 .detail-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -992,6 +1352,31 @@ small {
 
 .class-detail-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.emploi-detail-grid .detail-info-card-wide {
+    grid-column: span 2;
+}
+
+.emploi-detail-grid .detail-value {
+    overflow-wrap: anywhere;
+}
+
+.class-planning-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+}
+
+.class-planning-card h2 {
+    margin-bottom: 6px;
+}
+
+.class-planning-card p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.5;
 }
 
 .detail-info-card {
@@ -1053,6 +1438,27 @@ small {
 
     .detail-grid {
         grid-template-columns: 1fr;
+    }
+
+    .emploi-detail-grid .detail-info-card-wide {
+        grid-column: auto;
+    }
+
+    .class-planning-card {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .detail-text-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-text-section-wide {
+        grid-column: auto;
+    }
+
+    .detail-footer-actions {
+        justify-content: flex-start;
     }
 }
 
@@ -1162,6 +1568,10 @@ small {
 }
 
 .trimester-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
     margin-bottom: 14px;
 }
 
@@ -1175,9 +1585,131 @@ small {
     color: var(--muted);
 }
 
+.trimester-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.trimester-summary-item {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.trimester-summary-item span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+}
+
+.trimester-summary-item strong {
+    display: block;
+    color: var(--primary-dark);
+    font-size: 18px;
+}
+
+.trimester-summary-wide strong {
+    font-size: 16px;
+}
+
+.result-unpublished-box {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 12px;
+    color: #9a3412;
+    font-weight: 800;
+    padding: 14px 16px;
+}
+
+.annual-result-card {
+    border: 1px solid #bfdbfe;
+    border-radius: 16px;
+    padding: 18px;
+    background: #eff6ff;
+}
+
+.annual-result-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.annual-result-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.annual-result-head h3 {
+    margin: 0 0 4px;
+    color: var(--primary-dark);
+}
+
+.annual-result-head p {
+    margin: 0;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.annual-result-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.annual-result-grid div {
+    background: var(--white);
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.annual-result-grid span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+}
+
+.annual-result-grid strong {
+    display: block;
+    color: var(--primary-dark);
+    font-size: 18px;
+}
+
 @media (max-width: 800px) {
     .student-profile-card {
         grid-template-columns: 1fr;
+    }
+
+    .annual-result-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .trimester-summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .trimester-header,
+    .annual-result-head {
+        flex-direction: column;
+    }
+
+    .annual-result-actions {
+        justify-content: flex-start;
     }
 
     .student-photo-box {

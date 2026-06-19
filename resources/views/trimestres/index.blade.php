@@ -44,7 +44,8 @@
                     @forelse ($trimestres as $trimestre)
                         {{-- Preparation des donnees de la vue. --}}
                         @php
-                            $verrouille = $trimestre->statut === 'ferme' || $trimestre->anneeScolaire?->estFermee();
+                            $anneeFermee = $trimestre->anneeScolaire?->estFermee();
+                            $trimestreFerme = $trimestre->estFerme();
                         @endphp
 
                         <tr>
@@ -52,10 +53,14 @@
                             <td>{{ $trimestre->anneeScolaire->libelle }}</td>
                             <td>{{ $trimestre->date_debut?->format('d/m/Y') }}</td>
                             <td>{{ $trimestre->date_fin?->format('d/m/Y') }}</td>
-                            <td>{{ $trimestre->statut }}</td>
                             <td>
-                                {{-- Condition : ! $verrouille. --}}
-                                @if (! $verrouille)
+                                <span class="badge {{ $trimestre->badgeStatutPedagogique() }}">
+                                    {{ $trimestre->libelleStatutPedagogique() }}
+                                </span>
+                            </td>
+                            <td>
+                                {{-- Condition : ! $anneeFermee && ! $trimestreFerme. --}}
+                                @if (! $anneeFermee && ! $trimestreFerme)
                                     <a href="{{ route('trimestres.edit', $trimestre) }}" class="btn btn-primary">
                                         Modifier
                                     </a>
@@ -77,6 +82,16 @@
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-danger" onclick="return confirm('Supprimer ce trimestre ?')">
                                             Supprimer
+                                        </button>
+                                    </form>
+                                @elseif (! $anneeFermee && $trimestreFerme)
+                                    <form action="{{ route('trimestres.activer', $trimestre) }}" method="POST" style="display:inline;">
+                                        {{-- Jeton de securite du formulaire. --}}
+                                        @csrf
+                                        {{-- Methode HTTP du formulaire. --}}
+                                        @method('PATCH')
+                                        <button type="submit" class="btn btn-warning">
+                                            Réactiver
                                         </button>
                                     </form>
                                 {{-- Sinon, affichage de l alternative prevue. --}}

@@ -10,6 +10,7 @@ use App\Models\AnneeScolaire;
 use App\Models\ClasseMatiereUser;
 use App\Models\Inscription;
 use App\Models\Trimestre;
+use App\Services\BulletinService;
 
 class EleveController extends Controller
 {
@@ -83,8 +84,12 @@ class EleveController extends Controller
      */
     public function show(Request $request, Eleve $eleve)
     {
-        $selectedAnneeId = $request->input('annee_scolaire_id');
-        $selectedClasseId = $request->input('classe_id');
+        $selectedAnneeId = $request->filled('annee_scolaire_id')
+            ? $request->input('annee_scolaire_id')
+            : null;
+        $selectedClasseId = $request->filled('classe_id')
+            ? $request->input('classe_id')
+            : null;
         $filtreSoumis = $request->has('annee_scolaire_id') || $request->has('classe_id');
 
         $inscriptionsOptions = $eleve->inscriptions()
@@ -96,6 +101,21 @@ class EleveController extends Controller
             $derniereInscription = $inscriptionsOptions->first();
             $selectedAnneeId = $derniereInscription->annee_scolaire_id;
             $selectedClasseId = $derniereInscription->classe_id;
+        }
+
+        if ($selectedClasseId) {
+            $classeValide = $inscriptionsOptions->first(function ($inscription) use ($selectedAnneeId, $selectedClasseId) {
+                if ((string) $inscription->classe_id !== (string) $selectedClasseId) {
+                    return false;
+                }
+
+                return ! $selectedAnneeId
+                    || (string) $inscription->annee_scolaire_id === (string) $selectedAnneeId;
+            });
+
+            if (! $classeValide) {
+                $selectedClasseId = null;
+            }
         }
 
         $inscriptionsFiltrees = $eleve->inscriptions()
@@ -133,6 +153,7 @@ class EleveController extends Controller
     private function construireResultatsEleve($inscriptions)
     {
         $resultats = collect();
+        $bulletinService = app(BulletinService::class);
 
         foreach ($inscriptions as $inscription) {
             $trimestres = Trimestre::where('annee_scolaire_id', $inscription->annee_scolaire_id)
@@ -144,34 +165,59 @@ class EleveController extends Controller
             $resultatsTrimestres = collect();
 
             foreach ($trimestres as $trimestre) {
-                $notes = $inscription->notes
-                    ->filter(function ($note) use ($trimestre) {
-                        return $note->evaluation
-                            && (int) $note->evaluation->trimestre_id === (int) $trimestre->id;
-                    })
-                    ->values();
+                $statutPedagogique = $trimestre->statutPedagogique();
+                $evaluationsAttendues = $bulletinService->nombreEvaluationsAttendues($inscription, $trimestre);
+                $notesManquantes = $bulletinService->nombreNotesManquantes($inscription, $trimestre);
+                $publie = $trimestre->estFerme()
+                    && $evaluationsAttendues > 0
+                    && $notesManquantes === 0;
+                $notes = collect();
+                $moyenne = null;
+                $rang = null;
+                $appreciation = 'Résultats non publiés';
+                $totalPondere = null;
 
-                $moyenne = $this->calculerMoyenneInscriptionTrimestre(
-                    $inscription,
-                    $trimestre,
-                    $totalCoefficientsClasse
-                );
+                if ($publie) {
+                    $notes = $inscription->notes
+                        ->filter(function ($note) use ($trimestre) {
+                            return $note->evaluation
+                                && (int) $note->evaluation->trimestre_id === (int) $trimestre->id;
+                        })
+                        ->values();
 
-                $rang = $this->calculerRangEleveDansClasse(
-                    $inscription,
-                    $trimestre,
-                    $moyenne,
-                    $totalCoefficientsClasse
-                );
+                    $moyenne = $this->calculerMoyenneInscriptionTrimestre(
+                        $inscription,
+                        $trimestre,
+                        $totalCoefficientsClasse
+                    );
+
+                    $rang = $this->calculerRangEleveDansClasse(
+                        $inscription,
+                        $trimestre,
+                        $moyenne,
+                        $totalCoefficientsClasse
+                    );
+
+                    $appreciation = $moyenne !== null
+                        ? $this->appreciationMoyenne($moyenne)
+                        : '-';
+
+                    $totalPondere = $this->calculerTotalPondereNotes($notes);
+                }
 
                 $resultatsTrimestres->push([
                     'trimestre' => $trimestre,
+                    'publie' => $publie,
+                    'statut_pedagogique' => $statutPedagogique,
+                    'statut_libelle' => $trimestre->libelleStatutPedagogique(),
+                    'statut_badge' => $trimestre->badgeStatutPedagogique(),
+                    'evaluations_attendues' => $evaluationsAttendues,
+                    'notes_manquantes' => $notesManquantes,
                     'notes' => $notes,
                     'moyenne' => $moyenne,
                     'rang' => $rang,
-                    'appreciation' => $moyenne !== null
-                        ? $this->appreciationMoyenne($moyenne)
-                        : '-',
+                    'appreciation' => $appreciation,
+                    'total_pondere' => $totalPondere,
                     'total_coefficients' => $totalCoefficientsClasse,
                 ]);
             }
@@ -179,10 +225,95 @@ class EleveController extends Controller
             $resultats->push([
                 'inscription' => $inscription,
                 'trimestres' => $resultatsTrimestres,
+                'annuel' => $this->calculerResultatAnnuelInscription(
+                    $inscription,
+                    $trimestres,
+                    $resultatsTrimestres,
+                    $totalCoefficientsClasse
+                ),
             ]);
         }
 
         return $resultats;
+    }
+
+    private function calculerTotalPondereNotes($notes): float
+    {
+        $total = 0;
+
+        foreach ($notes as $note) {
+            $evaluation = $note->evaluation;
+
+            if (! $evaluation || (float) $evaluation->bareme <= 0) {
+                continue;
+            }
+
+            $noteSur20 = ((float) $note->valeur / (float) $evaluation->bareme) * 20;
+            $total += $noteSur20 * (float) $evaluation->coefficient;
+        }
+
+        return round($total, 2);
+    }
+
+    private function calculerResultatAnnuelInscription(
+        Inscription $inscription,
+        $trimestres,
+        $resultatsTrimestres,
+        float $totalCoefficientsClasse
+    ): array {
+        if ($trimestres->count() !== 3) {
+            return [
+                'publie' => false,
+                'message' => 'Le résultat annuel sera disponible quand les trois trimestres seront programmés et finis.',
+            ];
+        }
+
+        $tousLesTrimestresSontFermes = $trimestres
+            ->every(fn ($trimestre) => $trimestre->estFerme());
+
+        if (! $tousLesTrimestresSontFermes) {
+            return [
+                'publie' => false,
+                'message' => 'Le résultat annuel sera affiché à la fin des trois trimestres.',
+            ];
+        }
+
+        $tousLesTrimestresSontPublies = $resultatsTrimestres
+            ->every(fn ($resultatTrimestre) => $resultatTrimestre['publie']);
+
+        if (! $tousLesTrimestresSontPublies) {
+            return [
+                'publie' => false,
+                'message' => 'Le résultat annuel sera disponible quand tous les trimestres seront complets.',
+            ];
+        }
+
+        $moyennes = $resultatsTrimestres
+            ->pluck('moyenne')
+            ->filter(fn ($moyenne) => $moyenne !== null)
+            ->values();
+
+        if ($moyennes->count() !== 3) {
+            return [
+                'publie' => false,
+                'message' => 'Le résultat annuel est incomplet.',
+            ];
+        }
+
+        $moyenneAnnuelle = round($moyennes->avg(), 2);
+
+        return [
+            'publie' => true,
+            'moyenne' => $moyenneAnnuelle,
+            'rang' => $this->calculerRangAnnuelEleveDansClasse(
+                $inscription,
+                $trimestres,
+                $totalCoefficientsClasse
+            ),
+            'appreciation' => $this->appreciationMoyenne($moyenneAnnuelle),
+            'decision' => $moyenneAnnuelle >= 10 ? 'Passe' : 'Redouble',
+            'message' => null,
+        ];
     }
 
     /**
@@ -246,7 +377,7 @@ class EleveController extends Controller
             ])
             ->where('classe_id', $inscriptionEleve->classe_id)
             ->where('annee_scolaire_id', $inscriptionEleve->annee_scolaire_id)
-            ->where('statut', 'actif')
+            ->whereIn('statut', ['actif', 'termine'])
             ->get();
 
         $resultats = $inscriptionsClasse
@@ -282,6 +413,71 @@ class EleveController extends Controller
             }
 
             $moyennePrecedente = $resultat['moyenne'];
+        }
+
+        return null;
+    }
+
+    private function calculerRangAnnuelEleveDansClasse(
+        Inscription $inscriptionEleve,
+        $trimestres,
+        float $totalCoefficientsClasse
+    ): ?int {
+        $inscriptionsClasse = Inscription::with([
+                'eleve',
+                'notes.evaluation',
+            ])
+            ->where('classe_id', $inscriptionEleve->classe_id)
+            ->where('annee_scolaire_id', $inscriptionEleve->annee_scolaire_id)
+            ->whereIn('statut', ['actif', 'termine'])
+            ->get();
+
+        $resultats = $inscriptionsClasse
+            ->map(function ($inscription) use ($trimestres, $totalCoefficientsClasse) {
+                $moyennes = collect();
+
+                foreach ($trimestres as $trimestre) {
+                    $moyenne = $this->calculerMoyenneInscriptionTrimestre(
+                        $inscription,
+                        $trimestre,
+                        $totalCoefficientsClasse
+                    );
+
+                    if ($moyenne === null) {
+                        return [
+                            'inscription_id' => $inscription->id,
+                            'moyenne_annuelle' => null,
+                        ];
+                    }
+
+                    $moyennes->push($moyenne);
+                }
+
+                return [
+                    'inscription_id' => $inscription->id,
+                    'moyenne_annuelle' => round($moyennes->avg(), 2),
+                ];
+            })
+            ->filter(fn ($resultat) => $resultat['moyenne_annuelle'] !== null)
+            ->sortByDesc('moyenne_annuelle')
+            ->values();
+
+        $rang = 0;
+        $position = 0;
+        $moyennePrecedente = null;
+
+        foreach ($resultats as $resultat) {
+            $position++;
+
+            if ($moyennePrecedente === null || $resultat['moyenne_annuelle'] !== $moyennePrecedente) {
+                $rang = $position;
+            }
+
+            if ((int) $resultat['inscription_id'] === (int) $inscriptionEleve->id) {
+                return $rang;
+            }
+
+            $moyennePrecedente = $resultat['moyenne_annuelle'];
         }
 
         return null;
@@ -384,18 +580,28 @@ class EleveController extends Controller
      */
     private function genererMatriculeEleve(): string
     {
-        $dernier = Eleve::whereNotNull('matricule')
+        $plusGrandNumero = Eleve::withTrashed()
+            ->whereNotNull('matricule')
             ->where('matricule', 'like', 'ELV-%')
-            ->orderByDesc('id')
-            ->first();
+            ->pluck('matricule')
+            ->map(function ($matricule) {
+                if (preg_match('/^ELV-(\d+)$/', $matricule, $matches)) {
+                    return (int) $matches[1];
+                }
 
-        if (! $dernier) {
-            return 'ELV-0001';
+                return null;
+            })
+            ->filter(fn ($numero) => $numero !== null)
+            ->max() ?? 0;
+
+        $numero = $plusGrandNumero + 1;
+        $matricule = 'ELV-' . str_pad($numero, 4, '0', STR_PAD_LEFT);
+
+        while (Eleve::withTrashed()->where('matricule', $matricule)->exists()) {
+            $numero++;
+            $matricule = 'ELV-' . str_pad($numero, 4, '0', STR_PAD_LEFT);
         }
 
-        $numero = (int) str_replace('ELV-', '', $dernier->matricule);
-        $numero++;
-
-        return 'ELV-' . str_pad($numero, 4, '0', STR_PAD_LEFT);
+        return $matricule;
     }
 }

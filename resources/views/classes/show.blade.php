@@ -12,12 +12,19 @@
             </div>
 
             <div class="detail-actions">
-                <a href="{{ route('classes.index') }}" class="btn">
+                <a href="{{ $retourUrl ?? route('classes.index') }}" class="btn">
                     Retour
                 </a>
 
+                {{-- Condition : isset($pdfUrl). --}}
+                @if (isset($pdfUrl))
+                    <a href="{{ $pdfUrl }}" class="btn btn-success">
+                        Imprimer liste élèves
+                    </a>
+                @endif
+
                 {{-- Condition : ! $classe->anneeScolaire?->estFermee(). --}}
-                @if (! $classe->anneeScolaire?->estFermee())
+                @if (auth()->user()->estGestionnaire() && ! $classe->anneeScolaire?->estFermee())
                     <a href="{{ route('classes.edit', $classe) }}" class="btn btn-primary">
                         Modifier
                     </a>
@@ -38,11 +45,19 @@
             </div>
 
             <div class="detail-info-card">
-                <div class="detail-label">Frais de scolarité</div>
-                <div class="detail-value">
-                    {{ number_format($classe->frais_scolarite, 0, ',', ' ') }} FCFA
-                </div>
+                <div class="detail-label">Effectif</div>
+                <div class="detail-value">{{ $inscriptions->count() }}</div>
             </div>
+
+            {{-- Condition : auth()->user()->estGestionnaire(). --}}
+            @if (auth()->user()->estGestionnaire())
+                <div class="detail-info-card">
+                    <div class="detail-label">Frais de scolarité</div>
+                    <div class="detail-value">
+                        {{ number_format($classe->frais_scolarite, 0, ',', ' ') }} FCFA
+                    </div>
+                </div>
+            @endif
 
             <div class="detail-info-card">
                 <div class="detail-label">Enseignant principal</div>
@@ -65,16 +80,38 @@
             </div>
         </div>
 
+        @if (isset($planningUrl, $planningPdfUrl))
+            <div class="card class-planning-card">
+                <div>
+                    <h2>Emploi du temps</h2>
+
+                    <p>
+                        Planning hebdomadaire de la classe {{ $classe->nom }}
+                        pour l’année scolaire {{ $classe->anneeScolaire->libelle }}.
+                    </p>
+                </div>
+
+                <div class="detail-actions">
+                    <a href="{{ $planningUrl }}" class="btn btn-primary">
+                        Voir le planning
+                    </a>
+
+                    <a href="{{ $planningPdfUrl }}" class="btn btn-success">
+                        Imprimer le planning
+                    </a>
+                </div>
+            </div>
+        @endif
+
         <div class="card">
-            <h2>Enseignants intervenants</h2>
+            <h2>{{ $affectationsTitre ?? 'Enseignants intervenants' }}</h2>
 
             <table class="table">
                 <thead>
                     <tr>
                         <th>Enseignant</th>
                         <th>Matière</th>
-                        <th>Date début</th>
-                        <th>Date fin</th>
+                        <th>Coefficient</th>
                         <th>Statut</th>
                     </tr>
                 </thead>
@@ -85,8 +122,7 @@
                         <tr>
                             <td>{{ $affectation->enseignant?->name ?? '-' }}</td>
                             <td>{{ $affectation->matiere?->nom ?? '-' }}</td>
-                            <td>{{ $affectation->date_debut?->format('d/m/Y') ?? '-' }}</td>
-                            <td>{{ $affectation->date_fin?->format('d/m/Y') ?? '-' }}</td>
+                            <td>{{ number_format($affectation->coefficient, 2, ',', ' ') }}</td>
                             <td>
                                 <span class="badge {{ $affectation->statut === 'actif' ? 'badge-success' : 'badge-warning' }}">
                                     {{ $affectation->statut }}
@@ -96,7 +132,7 @@
                     {{-- Message affiche quand la liste est vide. --}}
                     @empty
                         <tr>
-                            <td colspan="5">
+                            <td colspan="4">
                                 Aucun enseignant intervenant pour cette classe.
                             </td>
                         </tr>

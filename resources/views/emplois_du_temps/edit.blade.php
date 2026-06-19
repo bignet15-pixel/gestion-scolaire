@@ -4,6 +4,32 @@
         <div class="card">
             <h1>Modifier un créneau</h1>
 
+            <form action="{{ route('emplois-du-temps.edit', $emploi_du_temps) }}" method="GET" class="filter-form filter-form-large">
+                <div class="form-group">
+                    <label class="form-label">Année scolaire</label>
+                    <select name="annee_scolaire_id" class="form-control">
+                        {{-- Remplit la liste des annees scolaires. --}}
+                        @foreach ($annees as $annee)
+                            <option value="{{ $annee->id }}" @selected((string) $selectedAnneeId === (string) $annee->id)>
+                                {{ $annee->libelle }} — {{ $annee->statut }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">
+                        Afficher
+                    </button>
+
+                    <a href="{{ route('emplois-du-temps.edit', $emploi_du_temps) }}" class="btn">
+                        Réinitialiser
+                    </a>
+                </div>
+
+                <input type="hidden" name="semaine" value="{{ $dateReference->format('Y-m-d') }}">
+            </form>
+
             {{-- Condition : $errors->any(). --}}
             @if ($errors->any())
                 <div class="alert alert-danger">
@@ -13,6 +39,13 @@
                             <li>{{ $error }}</li>
                         @endforeach
                     </ul>
+                </div>
+            @endif
+
+            {{-- Condition : $affectations->isEmpty(). --}}
+            @if ($affectations->isEmpty())
+                <div class="alert alert-warning">
+                    Aucune affectation active disponible pour cette année scolaire.
                 </div>
             @endif
 
@@ -67,7 +100,12 @@
                     <input type="text" name="salle" class="form-control" value="{{ old('salle', $emploi_du_temps->salle) }}">
                 </div>
 
-                <button type="submit" class="btn btn-primary">
+                <div class="form-group">
+                    <label class="form-label">Semaine de programmation</label>
+                    <input type="date" name="date_debut" class="form-control" value="{{ old('date_debut', $debutSemaine->format('Y-m-d')) }}">
+                </div>
+
+                <button type="submit" class="btn btn-primary" @disabled($affectations->isEmpty())>
                     Modifier
                 </button>
 

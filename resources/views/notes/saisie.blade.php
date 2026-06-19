@@ -38,6 +38,13 @@
             </div>
 
             <div class="note-summary-card">
+                <span>Année scolaire</span>
+                <strong>
+                    {{ $evaluation->trimestre?->anneeScolaire?->libelle ?? $evaluation->classe?->anneeScolaire?->libelle ?? '-' }}
+                </strong>
+            </div>
+
+            <div class="note-summary-card">
                 <span>Matière</span>
                 <strong>{{ $evaluation->matiere?->nom ?? '-' }}</strong>
             </div>
@@ -55,6 +62,21 @@
             <div class="note-summary-card">
                 <span>Coefficient</span>
                 <strong>{{ number_format($evaluation->coefficient, 2, ',', ' ') }}</strong>
+            </div>
+
+            <div class="note-summary-card">
+                <span>Élèves</span>
+                <strong>{{ $nombreEleves }}</strong>
+            </div>
+
+            <div class="note-summary-card">
+                <span>Notes saisies</span>
+                <strong>{{ $nombreNotesSaisies }}</strong>
+            </div>
+
+            <div class="note-summary-card">
+                <span>Notes manquantes</span>
+                <strong>{{ $nombreNotesManquantes }}</strong>
             </div>
         </div>
 
@@ -91,6 +113,13 @@
                 </div>
             @endif
 
+            {{-- Condition : $evaluationVerrouillee. --}}
+            @if ($evaluationVerrouillee)
+                <div class="alert alert-warning">
+                    Cette évaluation est en lecture seule : le trimestre ou l’année scolaire est fermé.
+                </div>
+            @endif
+
             <form action="{{ route('notes.enregistrer', $evaluation) }}" method="POST">
                 {{-- Jeton de securite du formulaire. --}}
                 @csrf
@@ -112,6 +141,7 @@
                             @php
                                 $noteExistante = $inscription->notes->first();
                                 $appreciation = $noteExistante?->appreciation;
+                                $noteManquante = ! $noteExistante || $noteExistante->valeur === null || $noteExistante->valeur === '';
                             @endphp
 
                             <tr>
@@ -127,7 +157,12 @@
                                         {{ $inscription->eleve?->prenom ?? '' }}
                                     </div>
 
-                                    
+                                    {{-- Condition : $noteManquante. --}}
+                                    @if ($noteManquante)
+                                        <span class="badge badge-warning">
+                                            Note manquante
+                                        </span>
+                                    @endif
                                 </td>
 
                                 <td>
@@ -142,6 +177,7 @@
                                     placeholder="Ex : 15"
                                     data-bareme="{{ $evaluation->bareme }}"
                                     data-target="appreciation-{{ $inscription->id }}"
+                                    @disabled($evaluationVerrouillee)
                                 >
 
                                     
@@ -168,7 +204,7 @@
                 </table>
 
                 <div class="note-actions">
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" @disabled($evaluationVerrouillee)>
                         Enregistrer les notes
                     </button>
 

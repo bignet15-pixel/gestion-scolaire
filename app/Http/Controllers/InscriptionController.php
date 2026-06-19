@@ -6,9 +6,10 @@ use App\Models\AnneeScolaire;
 use App\Models\Classe;
 use App\Models\ClasseMatiereUser;
 use App\Models\Eleve;
+use App\Models\Evaluation;
 use App\Models\Inscription;
+use App\Models\Note;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use App\Models\Trimestre;
 
 class InscriptionController extends Controller
@@ -77,19 +78,71 @@ class InscriptionController extends Controller
      */
     public function create()
     {
-        $eleves = Eleve::orderBy('nom')
-            ->orderBy('prenom')
-            ->get();
+        $annees = $this->anneesDisponiblesPourInscription();
 
-        $classes = Classe::with('anneeScolaire')
-            ->orderBy('annee_scolaire_id')
-            ->orderBy('niveau')
-            ->orderBy('nom')
-            ->get();
+        $anneeActive = $annees->first(fn ($annee) => $annee->estActive());
+        $selectedAnneeId = old('annee_scolaire_id', $anneeActive?->id ?? $annees->first()?->id);
+        $classes = $this->classesDisponiblesPourInscription($selectedAnneeId ? (int) $selectedAnneeId : null);
+        $selectedClasseId = old('classe_id', $classes->first()?->id);
 
-        $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+        if (! $classes->contains('id', (int) $selectedClasseId)) {
+            $selectedClasseId = $classes->first()?->id;
+        }
 
-        return view('inscriptions.create', compact('eleves', 'classes', 'annees'));
+        $eleves = $selectedClasseId
+            ? $this->elevesEligiblesPourClasse((int) $selectedClasseId)
+            : collect();
+        $selectedEleveId = old('eleve_id', $eleves->first()?->id);
+
+        return view('inscriptions.create', compact(
+            'eleves',
+            'classes',
+            'annees',
+            'selectedAnneeId',
+            'selectedClasseId',
+            'selectedEleveId'
+        ));
+    }
+
+    public function options(Request $request)
+    {
+        $anneeId = $request->input('annee_scolaire_id')
+            ? (int) $request->input('annee_scolaire_id')
+            : null;
+        $classeId = $request->input('classe_id')
+            ? (int) $request->input('classe_id')
+            : null;
+        $inscriptionId = $request->input('inscription_id')
+            ? (int) $request->input('inscription_id')
+            : null;
+
+        $inscription = $inscriptionId ? Inscription::find($inscriptionId) : null;
+        $classes = $this->classesDisponiblesPourInscription($anneeId, $inscription?->classe_id);
+
+        if (! $classeId || ! $classes->contains('id', $classeId)) {
+            $classeId = $classes->first()?->id;
+        }
+
+        $eleves = $classeId
+            ? $this->elevesEligiblesPourClasse((int) $classeId, $inscriptionId)
+            : collect();
+
+        return response()->json([
+            'selected_classe_id' => $classeId,
+            'classes' => $classes->map(function ($classe) {
+                return [
+                    'id' => $classe->id,
+                    'label' => $this->libelleClasseInscription($classe),
+                    'frais_scolarite' => (float) $classe->frais_scolarite,
+                ];
+            })->values(),
+            'eleves' => $eleves->map(function ($eleve) {
+                return [
+                    'id' => $eleve->id,
+                    'label' => $eleve->matricule . ' — ' . $eleve->nom . ' ' . $eleve->prenom,
+                ];
+            })->values(),
+        ]);
     }
 
     /**
@@ -120,16 +173,6 @@ class InscriptionController extends Controller
                 ->withInput();
         }
 
-        $erreurProgression = $this->verifierProgressionScolaire($eleve, $classe, $annee);
-
-        if ($erreurProgression !== null) {
-            return back()
-                ->withErrors([
-                    'classe_id' => $erreurProgression,
-                ])
-                ->withInput();
-        }
-
         if ((int) $classe->annee_scolaire_id !== (int) $annee->id) {
             return back()
                 ->withErrors([
@@ -138,10 +181,12 @@ class InscriptionController extends Controller
                 ->withInput();
         }
 
-        if ((int) $classe->annee_scolaire_id !== (int) $validated['annee_scolaire_id']) {
+        $erreurProgression = $this->verifierProgressionScolaire($eleve, $classe, $annee);
+
+        if ($erreurProgression !== null) {
             return back()
                 ->withErrors([
-                    'classe_id' => 'La classe choisie n’appartient pas à cette année scolaire.',
+                    'eleve_id' => $erreurProgression,
                 ])
                 ->withInput();
         }
@@ -193,23 +238,31 @@ class InscriptionController extends Controller
      */
     public function edit(Inscription $inscription)
     {
-        $eleves = Eleve::orderBy('nom')
-            ->orderBy('prenom')
-            ->get();
+        $annees = $this->anneesDisponiblesPourInscription((int) $inscription->annee_scolaire_id);
+        $selectedAnneeId = old('annee_scolaire_id', $inscription->annee_scolaire_id);
+        $classes = $this->classesDisponiblesPourInscription(
+            $selectedAnneeId ? (int) $selectedAnneeId : null,
+            (int) $inscription->classe_id
+        );
+        $selectedClasseId = old('classe_id', $inscription->classe_id);
 
-        $classes = Classe::with('anneeScolaire')
-            ->orderBy('annee_scolaire_id')
-            ->orderBy('niveau')
-            ->orderBy('nom')
-            ->get();
+        if (! $classes->contains('id', (int) $selectedClasseId)) {
+            $selectedClasseId = $classes->first()?->id;
+        }
 
-        $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+        $eleves = $selectedClasseId
+            ? $this->elevesEligiblesPourClasse((int) $selectedClasseId, $inscription->id)
+            : collect();
+        $selectedEleveId = old('eleve_id', $inscription->eleve_id);
 
         return view('inscriptions.edit', compact(
             'inscription',
             'eleves',
             'classes',
-            'annees'
+            'annees',
+            'selectedAnneeId',
+            'selectedClasseId',
+            'selectedEleveId'
         ));
     }
 
@@ -260,15 +313,7 @@ class InscriptionController extends Controller
         if ($erreurProgression !== null) {
             return back()
                 ->withErrors([
-                    'classe_id' => $erreurProgression,
-                ])
-                ->withInput();
-        }
-
-        if ((int) $classe->annee_scolaire_id !== (int) $validated['annee_scolaire_id']) {
-            return back()
-                ->withErrors([
-                    'classe_id' => 'La classe choisie n’appartient pas à cette année scolaire.',
+                    'eleve_id' => $erreurProgression,
                 ])
                 ->withInput();
         }
@@ -325,6 +370,72 @@ class InscriptionController extends Controller
         return redirect()
             ->route('inscriptions.index')
             ->with('success', 'Inscription supprimée avec succès.');
+    }
+
+    private function anneesDisponiblesPourInscription(?int $anneeIncluseId = null)
+    {
+        return AnneeScolaire::where(function ($query) use ($anneeIncluseId) {
+                $query->where('statut', '!=', 'fermee');
+
+                if ($anneeIncluseId) {
+                    $query->orWhere('id', $anneeIncluseId);
+                }
+            })
+            ->orderByDesc('date_debut')
+            ->get();
+    }
+
+    private function classesDisponiblesPourInscription(?int $anneeId, ?int $classeIncluseId = null)
+    {
+        return Classe::with('anneeScolaire')
+            ->when($anneeId, function ($query) use ($anneeId) {
+                $query->where('annee_scolaire_id', $anneeId);
+            })
+            ->where(function ($query) use ($classeIncluseId) {
+                $query->whereHas('anneeScolaire', function ($anneeQuery) {
+                    $anneeQuery->where('statut', '!=', 'fermee');
+                });
+
+                if ($classeIncluseId) {
+                    $query->orWhere('id', $classeIncluseId);
+                }
+            })
+            ->orderBy('niveau')
+            ->orderBy('nom')
+            ->get();
+    }
+
+    private function elevesEligiblesPourClasse(int $classeId, ?int $inscriptionIgnoreeId = null)
+    {
+        $classe = Classe::with('anneeScolaire')->find($classeId);
+
+        if (! $classe || ! $classe->anneeScolaire) {
+            return collect();
+        }
+
+        if ($classe->anneeScolaire->estFermee()) {
+            return collect();
+        }
+
+        return Eleve::orderBy('nom')
+            ->orderBy('prenom')
+            ->get()
+            ->filter(function ($eleve) use ($classe, $inscriptionIgnoreeId) {
+                return $this->verifierProgressionScolaire(
+                    $eleve,
+                    $classe,
+                    $classe->anneeScolaire,
+                    $inscriptionIgnoreeId
+                ) === null;
+            })
+            ->values();
+    }
+
+    private function libelleClasseInscription(Classe $classe): string
+    {
+        return $classe->nom
+            . ' — ' . ($classe->anneeScolaire?->libelle ?? '-')
+            . ' — frais : ' . number_format((float) $classe->frais_scolarite, 0, ',', ' ') . ' FCFA';
     }
 
     /**
@@ -505,27 +616,43 @@ class InscriptionController extends Controller
         Trimestre $trimestre,
         float $totalCoefficientsClasse
     ): ?float {
-        $inscription->loadMissing('notes.evaluation');
-
         if ($totalCoefficientsClasse <= 0) {
+            return null;
+        }
+
+        if (! $trimestre->estFerme()) {
+            return null;
+        }
+
+        $evaluations = Evaluation::where('classe_id', $inscription->classe_id)
+            ->where('trimestre_id', $trimestre->id)
+            ->get();
+
+        if ($evaluations->isEmpty()) {
+            return null;
+        }
+
+        $notes = Note::where('inscription_id', $inscription->id)
+            ->whereIn('evaluation_id', $evaluations->pluck('id'))
+            ->whereNotNull('valeur')
+            ->get()
+            ->keyBy('evaluation_id');
+
+        if ($notes->count() !== $evaluations->count()) {
             return null;
         }
 
         $totalPoints = 0;
 
-        foreach ($inscription->notes as $note) {
-            $evaluation = $note->evaluation;
+        foreach ($evaluations as $evaluation) {
+            $note = $notes->get($evaluation->id);
 
-            if (! $evaluation) {
-                continue;
-            }
-
-            if ((int) $evaluation->trimestre_id !== (int) $trimestre->id) {
-                continue;
+            if (! $note) {
+                return null;
             }
 
             if ((float) $evaluation->bareme <= 0) {
-                continue;
+                return null;
             }
 
             $noteSur20 = ((float) $note->valeur / (float) $evaluation->bareme) * 20;

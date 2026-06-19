@@ -21,7 +21,7 @@ class NoteController extends Controller
         $evaluation->load([
             'classe.anneeScolaire',
             'matiere',
-            'trimestre',
+            'trimestre.anneeScolaire',
             'createur',
         ]);
 
@@ -40,7 +40,30 @@ class NoteController extends Controller
         ->select('inscriptions.*')
         ->get();
 
-        return view('notes.saisie', compact('evaluation', 'inscriptions'));
+        $nombreEleves = $inscriptions->count();
+
+        $nombreNotesSaisies = $inscriptions
+            ->filter(function ($inscription) {
+                $note = $inscription->notes->first();
+
+                return $note && $note->valeur !== null && $note->valeur !== '';
+            })
+            ->count();
+
+        $nombreNotesManquantes = $nombreEleves - $nombreNotesSaisies;
+
+        $evaluationVerrouillee = $evaluation->trimestre?->estFerme()
+            || $evaluation->classe?->anneeScolaire?->estFermee()
+            || $evaluation->trimestre?->anneeScolaire?->estFermee();
+
+        return view('notes.saisie', compact(
+            'evaluation',
+            'inscriptions',
+            'nombreEleves',
+            'nombreNotesSaisies',
+            'nombreNotesManquantes',
+            'evaluationVerrouillee'
+        ));
     }
 
     /**
@@ -146,7 +169,7 @@ class NoteController extends Controller
         $autorise = ClasseMatiereUser::where('user_id', $user->id)
             ->where('classe_id', $evaluation->classe_id)
             ->where('matiere_id', $evaluation->matiere_id)
-            ->where('statut', 'actif')
+            ->whereIn('statut', ['actif', 'termine'])
             ->exists();
 
         if (! $autorise) {

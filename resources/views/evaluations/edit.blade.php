@@ -22,29 +22,69 @@
                 {{-- Methode HTTP du formulaire. --}}
                 @method('PUT')
 
-                <div class="form-group">
-                    <label class="form-label">Classe</label>
-                    <select name="classe_id" class="form-control">
-                        {{-- Remplit la liste des classes disponibles. --}}
-                        @foreach ($classes as $classe)
-                            <option value="{{ $classe->id }}" @selected(old('classe_id', $evaluation->classe_id) == $classe->id)>
-                                {{ $classe->nom }} — {{ $classe->anneeScolaire->libelle }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
+                {{-- Condition : auth()->user()->estEnseignant(). --}}
+                @if (auth()->user()->estEnseignant())
+                    {{-- Condition : $affectations->isEmpty(). --}}
+                    @if ($affectations->isEmpty())
+                        <div class="alert alert-warning">
+                            Aucune affectation active trouvée pour l’année scolaire courante.
+                        </div>
+                    {{-- Sinon, affiche les affectations disponibles pour modifier cette evaluation. --}}
+                    @else
+                        <div class="form-group">
+                            <label class="form-label">Classe / matière</label>
+                            <select name="affectation_id" class="form-control">
+                                {{-- Remplit les couples classe et matiere affectes a l enseignant pour l annee courante. --}}
+                                @foreach ($affectations as $affectation)
+                                    <option
+                                        value="{{ $affectation->id }}"
+                                        @selected(
+                                            old('affectation_id')
+                                                ? old('affectation_id') == $affectation->id
+                                                : (
+                                                    (int) $evaluation->classe_id === (int) $affectation->classe_id
+                                                    && (int) $evaluation->matiere_id === (int) $affectation->matiere_id
+                                                )
+                                        )
+                                    >
+                                        {{ $affectation->classe?->nom }}
+                                        —
+                                        {{ $affectation->matiere?->nom }}
+                                        —
+                                        coefficient {{ number_format($affectation->coefficient, 2, ',', ' ') }}
+                                        —
+                                        {{ $affectation->classe?->anneeScolaire?->libelle }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+                {{-- Sinon, affichage des champs administratifs. --}}
+                @else
+                    <div class="form-group">
+                        <label class="form-label">Classe</label>
+                        <select name="classe_id" class="form-control">
+                            {{-- Remplit la liste des classes disponibles. --}}
+                            @foreach ($classes as $classe)
+                                <option value="{{ $classe->id }}" @selected(old('classe_id', $evaluation->classe_id) == $classe->id)>
+                                    {{ $classe->nom }} — {{ $classe->anneeScolaire->libelle }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div class="form-group">
-                    <label class="form-label">Matière</label>
-                    <select name="matiere_id" class="form-control">
-                        {{-- Affiche les matieres dans le tableau. --}}
-                        @foreach ($matieres as $matiere)
-                            <option value="{{ $matiere->id }}" @selected(old('matiere_id', $evaluation->matiere_id) == $matiere->id)>
-                                {{ $matiere->nom }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
+                    <div class="form-group">
+                        <label class="form-label">Matière</label>
+                        <select name="matiere_id" class="form-control">
+                            {{-- Affiche les matieres dans le tableau. --}}
+                            @foreach ($matieres as $matiere)
+                                <option value="{{ $matiere->id }}" @selected(old('matiere_id', $evaluation->matiere_id) == $matiere->id)>
+                                    {{ $matiere->nom }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
 
                 <div class="form-group">
                     <label class="form-label">Trimestre</label>
@@ -90,17 +130,24 @@
                     <input type="time" name="heure_fin" class="form-control" value="{{ old('heure_fin', $evaluation->heure_fin?->format('H:i')) }}">
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label">Coefficient</label>
-                    <input type="number" step="0.1" name="coefficient" class="form-control" value="{{ old('coefficient', $evaluation->coefficient) }}">
-                </div>
+                {{-- Condition : auth()->user()->estGestionnaire(). --}}
+                @if (auth()->user()->estGestionnaire())
+                    <div class="form-group">
+                        <label class="form-label">Coefficient</label>
+                        <input type="number" step="0.1" name="coefficient" class="form-control" value="{{ old('coefficient', $evaluation->coefficient) }}">
+                    </div>
+                @endif
 
                 <div class="form-group">
                     <label class="form-label">Barème</label>
                     <input type="number" step="0.1" name="bareme" class="form-control" value="{{ old('bareme', $evaluation->bareme) }}">
                 </div>
 
-                <button type="submit" class="btn btn-primary">
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                    @disabled(auth()->user()->estEnseignant() && $affectations->isEmpty())
+                >
                     Modifier
                 </button>
 
