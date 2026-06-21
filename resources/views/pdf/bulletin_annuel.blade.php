@@ -180,7 +180,23 @@
                     <td class="number">{{ $bulletinTrimestre['rang'] ?? '-' }}</td>
                     <td class="number">{{ number_format($bulletinTrimestre['total_pondere'], 2, ',', ' ') }}</td>
                     <td class="number">
-                        {{ $bulletinTrimestre['total_points_en_moins'] > 0 ? '-' . number_format($bulletinTrimestre['total_points_en_moins'], 2, ',', ' ') : '0' }}
+                        @php
+                            $retenuesEnCours = $bulletinTrimestre['total_points_en_moins_en_cours'] ?? 0;
+                            $retenuesDefinitives = $bulletinTrimestre['total_points_en_moins_definitifs'] ?? ($bulletinTrimestre['total_points_en_moins'] ?? 0);
+                        @endphp
+                        @if ($retenuesEnCours > 0 || $retenuesDefinitives > 0)
+                            @if ($retenuesEnCours > 0)
+                                -{{ number_format($retenuesEnCours, 2, ',', ' ') }} en cours
+                            @endif
+                            @if ($retenuesEnCours > 0 && $retenuesDefinitives > 0)
+                                <br>
+                            @endif
+                            @if ($retenuesDefinitives > 0)
+                                -{{ number_format($retenuesDefinitives, 2, ',', ' ') }} définitif
+                            @endif
+                        @else
+                            0
+                        @endif
                     </td>
                     <td class="number">{{ number_format($bulletinTrimestre['total_pondere_final'], 2, ',', ' ') }}</td>
                     <td>{{ $bulletinTrimestre['appreciation'] }}</td>

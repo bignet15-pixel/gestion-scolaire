@@ -233,10 +233,25 @@
                                     <strong>{{ number_format($resultatTrimestre['total_coefficients'], 2, ',', ' ') }}</strong>
                                 </div>
 
-                                @if ($resultatTrimestre['total_points_en_moins'] > 0)
+                                @php
+                                    $retenuesEnCours = $resultatTrimestre['total_points_en_moins_en_cours'] ?? 0;
+                                    $retenuesDefinitives = $resultatTrimestre['total_points_en_moins_definitifs'] ?? ($resultatTrimestre['total_points_en_moins'] ?? 0);
+                                @endphp
+
+                                @if ($retenuesEnCours > 0 || $retenuesDefinitives > 0)
                                     <div class="trimester-summary-item">
                                         <span>Retenues discipline / assiduité</span>
-                                        <strong>-{{ number_format($resultatTrimestre['total_points_en_moins'], 2, ',', ' ') }}</strong>
+                                        <strong>
+                                            @if ($retenuesEnCours > 0)
+                                                -{{ number_format($retenuesEnCours, 2, ',', ' ') }} en cours
+                                            @endif
+                                            @if ($retenuesEnCours > 0 && $retenuesDefinitives > 0)
+                                                <br>
+                                            @endif
+                                            @if ($retenuesDefinitives > 0)
+                                                -{{ number_format($retenuesDefinitives, 2, ',', ' ') }} définitif
+                                            @endif
+                                        </strong>
                                     </div>
 
                                     <div class="trimester-summary-item">

@@ -73,7 +73,25 @@ class SanctionAppliquee extends Model
         return $this->belongsTo(User::class, 'decision_par')->withTrashed();
     }
 
-    public static function totalPointsEnMoinsPour(int $inscriptionId, int $trimestreId): float
+    /**
+     * Points en moins visibles, mais pas encore définitifs.
+     * Statut appliquee = sanction en cours.
+     */
+    public static function totalPointsEnMoinsEnCoursPour(int $inscriptionId, int $trimestreId): float
+    {
+        return (float) static::query()
+            ->where('inscription_id', $inscriptionId)
+            ->where('trimestre_id', $trimestreId)
+            ->where('statut', 'appliquee')
+            ->where('type_effet', 'points_en_moins')
+            ->sum('valeur_effet');
+    }
+
+    /**
+     * Points en moins réellement appliqués au calcul.
+     * Statut terminee = sanction clôturée et effet définitif.
+     */
+    public static function totalPointsEnMoinsDefinitifsPour(int $inscriptionId, int $trimestreId): float
     {
         return (float) static::query()
             ->where('inscription_id', $inscriptionId)
@@ -81,5 +99,14 @@ class SanctionAppliquee extends Model
             ->where('statut', 'terminee')
             ->where('type_effet', 'points_en_moins')
             ->sum('valeur_effet');
+    }
+
+    /**
+     * Compatibilité avec l'ancien code : cette méthode retourne uniquement
+     * les points définitifs, donc ceux des sanctions terminées.
+     */
+    public static function totalPointsEnMoinsPour(int $inscriptionId, int $trimestreId): float
+    {
+        return static::totalPointsEnMoinsDefinitifsPour($inscriptionId, $trimestreId);
     }
 }

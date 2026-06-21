@@ -269,10 +269,25 @@
                                 <td>{{ $resultat['nombre_notes'] }}</td>
                                 <td>{{ number_format($resultat['total_pondere'], 2, ',', ' ') }}</td>
                                 <td>
-                                    @if ($resultat['total_points_en_moins'] > 0)
-                                        <span class="badge badge-danger">
-                                            -{{ number_format($resultat['total_points_en_moins'], 2, ',', ' ') }}
-                                        </span>
+                                    @php
+                                        $retenuesEnCours = $resultat['total_points_en_moins_en_cours'] ?? 0;
+                                        $retenuesDefinitives = $resultat['total_points_en_moins_definitifs'] ?? ($resultat['total_points_en_moins'] ?? 0);
+                                    @endphp
+
+                                    @if ($retenuesEnCours > 0 || $retenuesDefinitives > 0)
+                                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                                            @if ($retenuesEnCours > 0)
+                                                <span class="badge badge-warning">
+                                                    -{{ number_format($retenuesEnCours, 2, ',', ' ') }} en cours
+                                                </span>
+                                            @endif
+
+                                            @if ($retenuesDefinitives > 0)
+                                                <span class="badge badge-danger">
+                                                    -{{ number_format($retenuesDefinitives, 2, ',', ' ') }} définitif
+                                                </span>
+                                            @endif
+                                        </div>
                                     @else
                                         0
                                     @endif

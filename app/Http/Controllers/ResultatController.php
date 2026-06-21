@@ -187,6 +187,9 @@ class ResultatController extends Controller
                 'moyenne_avant_sanction' => $details['moyenne_avant_sanction'],
                 'total_pondere' => $details['total_pondere'],
                 'total_points_en_moins' => $details['total_points_en_moins'],
+                'total_points_en_moins_visibles' => $details['total_points_en_moins_visibles'] ?? $details['total_points_en_moins'],
+                'total_points_en_moins_en_cours' => $details['total_points_en_moins_en_cours'] ?? 0,
+                'total_points_en_moins_definitifs' => $details['total_points_en_moins_definitifs'] ?? $details['total_points_en_moins'],
                 'total_pondere_final' => $details['total_pondere_final'],
                 'total_coefficients' => $details['total_coefficients'],
                 'appreciation' => $moyenne !== null

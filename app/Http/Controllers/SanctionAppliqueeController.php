@@ -53,7 +53,11 @@ class SanctionAppliqueeController extends Controller
             ->when($selectedClasseId, function ($query) use ($selectedClasseId) {
                 $query->whereHas('inscription', fn ($q) => $q->where('classe_id', $selectedClasseId));
             })
-            ->when($selectedStatut, fn ($query) => $query->where('statut', $selectedStatut))
+            ->when(
+                $selectedStatut,
+                fn ($query) => $query->where('statut', $selectedStatut),
+                fn ($query) => $query->whereIn('statut', ['proposee', 'appliquee'])
+            )            
             ->when($selectedOrigine, fn ($query) => $query->where('origine', $selectedOrigine))
             ->orderByRaw("CASE statut WHEN 'proposee' THEN 1 WHEN 'appliquee' THEN 2 WHEN 'terminee' THEN 3 WHEN 'ignoree' THEN 4 ELSE 5 END")
             ->orderByDesc('created_at')
@@ -316,6 +320,13 @@ class SanctionAppliqueeController extends Controller
         if ($sanction_appliquee->statut !== 'appliquee') {
             return back()->withErrors([
                 'sanction' => 'Seule une sanction appliquée peut être terminée.',
+            ]);
+        }
+
+        if ($sanction_appliquee->type_effet === 'points_en_moins'
+            && ! $sanction_appliquee->trimestre_id) {
+            return back()->withErrors([
+                'sanction' => 'Impossible de terminer cette sanction : le trimestre concerné est obligatoire pour les points en moins.',
             ]);
         }
 

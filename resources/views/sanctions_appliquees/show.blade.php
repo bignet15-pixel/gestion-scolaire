@@ -39,7 +39,15 @@
                 @endphp
                 <div class="profile-row"><span>Statut</span><strong>{{ $statutLibelle }}</strong></div>
                 <div class="profile-row"><span>Date application</span><strong>{{ $sanctionAppliquee->date_application?->format('d/m/Y') ?? '-' }}</strong></div>
-                <div class="profile-row"><span>Période</span><strong>{{ $sanctionAppliquee->periode_debut?->format('d/m/Y') ?? '-' }} au {{ $sanctionAppliquee->periode_fin?->format('d/m/Y') ?? '-' }}</strong></div>
+                <div class="profile-row"><span>Période</span><strong>
+                    @if ($sanctionAppliquee->periode_debut && $sanctionAppliquee->periode_fin)
+                        {{ $sanctionAppliquee->periode_debut->format('d/m/Y') }} au {{ $sanctionAppliquee->periode_fin->format('d/m/Y') }}
+                    @elseif ($sanctionAppliquee->trimestre)
+                        {{ $sanctionAppliquee->trimestre->nom }}
+                    @else
+                        -
+                    @endif
+                </strong></div>
                 <div class="profile-row"><span>Nombre d’événements</span><strong>{{ $sanctionAppliquee->nombre_evenements }}</strong></div>
                 <div class="profile-row"><span>Trimestre</span><strong>{{ $sanctionAppliquee->trimestre?->nom ?? '-' }}</strong></div>
                 <div class="profile-row"><span>Effet</span><strong>{{ ucfirst(str_replace('_', ' ', $sanctionAppliquee->type_effet)) }}</strong></div>

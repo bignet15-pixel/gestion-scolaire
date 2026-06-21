@@ -32,7 +32,7 @@
                 <div class="form-group">
                     <label class="form-label">Statut</label>
                     <select name="statut" class="form-control">
-                        <option value="">Tous les statuts</option>
+                    <option value="">Actives seulement</option>
                         @foreach (['proposee', 'appliquee', 'ignoree', 'annulee', 'terminee'] as $statut)
                             <option value="{{ $statut }}" @selected($selectedStatut === $statut)>{{ ucfirst($statut) }}</option>
                         @endforeach
@@ -140,9 +140,12 @@
                             <td>{{ $element->sanction?->nom ?? '-' }}</td>
                             <td><span class="badge {{ $origineClass }}">{{ ucfirst($element->origine) }}</span></td>
                             <td>
-                                {{ $element->periode_debut?->format('d/m/Y') ?? '-' }}
-                                @if ($element->periode_fin)
-                                    au {{ $element->periode_fin->format('d/m/Y') }}
+                                @if ($element->periode_debut && $element->periode_fin)
+                                    {{ $element->periode_debut->format('d/m/Y') }} au {{ $element->periode_fin->format('d/m/Y') }}
+                                @elseif ($element->trimestre)
+                                    {{ $element->trimestre->nom }}
+                                @else
+                                    -
                                 @endif
                             </td>
                             <td>{{ $element->nombre_evenements }}</td>

@@ -72,15 +72,32 @@ class ResultatTrimestrielService
         float $totalPondere,
         float $totalCoefficients
     ): array {
-        $totalPointsEnMoins = SanctionAppliquee::totalPointsEnMoinsPour(
+        $totalPointsEnMoinsEnCours = SanctionAppliquee::totalPointsEnMoinsEnCoursPour(
             $inscriptionId,
             $trimestreId
         );
-        $totalPondereFinal = max(0, $totalPondere - $totalPointsEnMoins);
+
+        $totalPointsEnMoinsDefinitifs = SanctionAppliquee::totalPointsEnMoinsDefinitifsPour(
+            $inscriptionId,
+            $trimestreId
+        );
+
+        $totalPointsEnMoinsVisibles = $totalPointsEnMoinsEnCours + $totalPointsEnMoinsDefinitifs;
+
+        // Seules les sanctions terminées modifient réellement le total pondéré.
+        $totalPondereFinal = max(0, $totalPondere - $totalPointsEnMoinsDefinitifs);
 
         return [
             'total_pondere' => round($totalPondere, 2),
-            'total_points_en_moins' => round($totalPointsEnMoins, 2),
+
+            // Points affichés dans les vues.
+            'total_points_en_moins_visibles' => round($totalPointsEnMoinsVisibles, 2),
+            'total_points_en_moins_en_cours' => round($totalPointsEnMoinsEnCours, 2),
+            'total_points_en_moins_definitifs' => round($totalPointsEnMoinsDefinitifs, 2),
+
+            // Compatibilité : total_points_en_moins = points définitifs.
+            'total_points_en_moins' => round($totalPointsEnMoinsDefinitifs, 2),
+
             'total_pondere_final' => round($totalPondereFinal, 2),
             'total_coefficients' => round($totalCoefficients, 2),
             'moyenne_avant_sanction' => $totalCoefficients > 0
