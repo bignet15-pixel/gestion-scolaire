@@ -294,38 +294,10 @@ class ResultatController extends Controller
     ): array {
         $inscription->loadMissing('notes.evaluation');
 
-        if ($totalCoefficientsClasse <= 0) {
-            return $this->resultatTrimestrielService->appliquerRetenues(
-                $inscription->id,
-                $trimestre->id,
-                0,
-                $totalCoefficientsClasse
-            );
-        }
-
-        $totalPoints = 0;
-
-        foreach ($inscription->notes as $note) {
-            $evaluation = $note->evaluation;
-
-            if (! $evaluation) {
-                continue;
-            }
-
-            if ((int) $evaluation->trimestre_id !== (int) $trimestre->id) {
-                continue;
-            }
-
-            if ((float) $evaluation->bareme <= 0) {
-                continue;
-            }
-
-            $noteSur20 = ((float) $note->valeur / (float) $evaluation->bareme) * 20;
-
-            $coefficient = (float) $evaluation->coefficient;
-
-            $totalPoints += $noteSur20 * $coefficient;
-        }
+        $totalPoints = $this->resultatTrimestrielService->calculerTotalPondereParMatiere(
+            $inscription->notes,
+            $trimestre->id
+        );
 
         return $this->resultatTrimestrielService->appliquerRetenues(
             $inscription->id,
@@ -386,9 +358,7 @@ class ResultatController extends Controller
      */
     private function totalCoefficientsClasse(Classe $classe): float
     {
-        return (float) ClasseMatiereUser::where('classe_id', $classe->id)
-            ->whereIn('statut', ['actif', 'termine'])
-            ->sum('coefficient');
+        return $this->resultatTrimestrielService->totalCoefficientsClasse($classe->id);
     }
 
     /**

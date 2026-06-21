@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\ClasseMatiereUser;
 use App\Models\Evaluation;
 use App\Models\Inscription;
 use App\Models\Note;
@@ -68,7 +67,8 @@ class BulletinService
 
         $lignes = $this->lignesTrimestrielles($inscription, $trimestre);
         $totalCoefficients = $this->totalCoefficientsClasse((int) $inscription->classe_id);
-        $totalPondere = round($lignes->sum('points'), 2);
+        $totalPondere = $this->resultatTrimestrielService
+            ->calculerTotalPondereDepuisLignes($lignes);
         $resultat = $this->resultatTrimestrielService->appliquerRetenues(
             $inscription->id,
             $trimestre->id,
@@ -143,20 +143,24 @@ class BulletinService
             ->get()
             ->keyBy('evaluation_id');
 
-        return $evaluations->map(function ($evaluation) use ($notes) {
+        $nombreEvaluationsParMatiere = $evaluations->countBy('matiere_id');
+
+        return $evaluations->map(function ($evaluation) use ($notes, $nombreEvaluationsParMatiere) {
             $note = $notes->get($evaluation->id);
             $noteSur20 = ((float) $note->valeur / (float) $evaluation->bareme) * 20;
             $coefficient = (float) $evaluation->coefficient;
+            $nombreEvaluations = max(1, (int) $nombreEvaluationsParMatiere->get($evaluation->matiere_id, 1));
 
             return [
                 'evaluation' => $evaluation,
+                'matiere_id' => (int) $evaluation->matiere_id,
                 'matiere' => $evaluation->matiere?->nom ?? '-',
                 'type' => $evaluation->type,
                 'note' => (float) $note->valeur,
                 'bareme' => (float) $evaluation->bareme,
-                'note_sur_20' => round($noteSur20, 2),
+                'note_sur_20' => $noteSur20,
                 'coefficient' => $coefficient,
-                'points' => round($noteSur20 * $coefficient, 2),
+                'points' => round(($noteSur20 / $nombreEvaluations) * $coefficient, 2),
                 'appreciation' => $note->appreciation ?? '-',
             ];
         });
@@ -182,7 +186,9 @@ class BulletinService
             return null;
         }
 
-        $totalPondere = (float) $this->lignesTrimestrielles($inscription, $trimestre)->sum('points');
+        $totalPondere = $this->resultatTrimestrielService->calculerTotalPondereDepuisLignes(
+            $this->lignesTrimestrielles($inscription, $trimestre)
+        );
 
         return $this->resultatTrimestrielService->appliquerRetenues(
             $inscription->id,
@@ -282,9 +288,7 @@ class BulletinService
 
     private function totalCoefficientsClasse(int $classeId): float
     {
-        return (float) ClasseMatiereUser::where('classe_id', $classeId)
-            ->whereIn('statut', ['actif', 'termine'])
-            ->sum('coefficient');
+        return $this->resultatTrimestrielService->totalCoefficientsClasse($classeId);
     }
 
     private function appreciationMoyenne(float $moyenne): string

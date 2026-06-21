@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\AnneeScolaire;
 use App\Models\Classe;
-use App\Models\ClasseMatiereUser;
 use App\Models\Eleve;
 use App\Models\Evaluation;
 use App\Models\Inscription;
@@ -636,7 +635,8 @@ class InscriptionController extends Controller
             return null;
         }
 
-        $notes = Note::where('inscription_id', $inscription->id)
+        $notes = Note::with('evaluation')
+            ->where('inscription_id', $inscription->id)
             ->whereIn('evaluation_id', $evaluations->pluck('id'))
             ->whereNotNull('valeur')
             ->get()
@@ -646,25 +646,10 @@ class InscriptionController extends Controller
             return null;
         }
 
-        $totalPoints = 0;
-
-        foreach ($evaluations as $evaluation) {
-            $note = $notes->get($evaluation->id);
-
-            if (! $note) {
-                return null;
-            }
-
-            if ((float) $evaluation->bareme <= 0) {
-                return null;
-            }
-
-            $noteSur20 = ((float) $note->valeur / (float) $evaluation->bareme) * 20;
-
-            $coefficient = (float) $evaluation->coefficient;
-
-            $totalPoints += $noteSur20 * $coefficient;
-        }
+        $totalPoints = $this->resultatTrimestrielService->calculerTotalPondereParMatiere(
+            $notes,
+            $trimestre->id
+        );
 
         return $this->resultatTrimestrielService->appliquerRetenues(
             $inscription->id,
@@ -679,8 +664,6 @@ class InscriptionController extends Controller
      */
     private function totalCoefficientsClasse(int $classeId): float
     {
-        return (float) ClasseMatiereUser::where('classe_id', $classeId)
-            ->whereIn('statut', ['actif', 'termine'])
-            ->sum('coefficient');
+        return $this->resultatTrimestrielService->totalCoefficientsClasse($classeId);
     }
 }

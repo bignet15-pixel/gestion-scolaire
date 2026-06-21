@@ -27,7 +27,10 @@
                 @endphp
 
                 {{-- Condition : ! $verrouille. --}}
-                @if (! $verrouille)
+                @if (
+                    ! $verrouille
+                    && (auth()->user()->estGestionnaire() || auth()->id() === $evaluation->user_id)
+                )
                     <a href="{{ route('notes.saisie', $evaluation) }}" class="btn btn-success">
                         Saisir / modifier les notes
                     </a>

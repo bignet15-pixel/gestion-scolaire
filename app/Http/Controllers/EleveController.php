@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\AnneeScolaire;
-use App\Models\ClasseMatiereUser;
 use App\Models\Eleve;
 use App\Models\Inscription;
 use App\Models\Trimestre;
@@ -255,20 +254,7 @@ class EleveController extends Controller
 
     private function calculerTotalPondereNotes($notes): float
     {
-        $total = 0;
-
-        foreach ($notes as $note) {
-            $evaluation = $note->evaluation;
-
-            if (! $evaluation || (float) $evaluation->bareme <= 0) {
-                continue;
-            }
-
-            $noteSur20 = ((float) $note->valeur / (float) $evaluation->bareme) * 20;
-            $total += $noteSur20 * (float) $evaluation->coefficient;
-        }
-
-        return $total;
+        return $this->resultatTrimestrielService->calculerTotalPondereParMatiere($notes);
     }
 
     private function calculerResultatAnnuelInscription(
@@ -346,29 +332,10 @@ class EleveController extends Controller
             return null;
         }
 
-        $totalPoints = 0;
-
-        foreach ($inscription->notes as $note) {
-            $evaluation = $note->evaluation;
-
-            if (! $evaluation) {
-                continue;
-            }
-
-            if ((int) $evaluation->trimestre_id !== (int) $trimestre->id) {
-                continue;
-            }
-
-            if ((float) $evaluation->bareme <= 0) {
-                continue;
-            }
-
-            $noteSur20 = ((float) $note->valeur / (float) $evaluation->bareme) * 20;
-
-            $coefficient = (float) $evaluation->coefficient;
-
-            $totalPoints += $noteSur20 * $coefficient;
-        }
+        $totalPoints = $this->resultatTrimestrielService->calculerTotalPondereParMatiere(
+            $inscription->notes,
+            $trimestre->id
+        );
 
         return $this->resultatTrimestrielService->appliquerRetenues(
             $inscription->id,
@@ -508,9 +475,7 @@ class EleveController extends Controller
      */
     private function totalCoefficientsClasse(int $classeId): float
     {
-        return (float) ClasseMatiereUser::where('classe_id', $classeId)
-            ->whereIn('statut', ['actif', 'termine'])
-            ->sum('coefficient');
+        return $this->resultatTrimestrielService->totalCoefficientsClasse($classeId);
     }
 
     /**

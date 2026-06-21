@@ -166,6 +166,10 @@ class NoteController extends Controller
             return;
         }
 
+        if ((int) $evaluation->user_id !== (int) $user->id) {
+            abort(403, 'Vous ne pouvez saisir les notes que pour vos propres évaluations.');
+        }
+
         $autorise = ClasseMatiereUser::where('user_id', $user->id)
             ->where('classe_id', $evaluation->classe_id)
             ->where('matiere_id', $evaluation->matiere_id)
