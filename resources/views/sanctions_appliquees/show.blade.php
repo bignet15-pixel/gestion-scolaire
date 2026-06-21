@@ -18,11 +18,26 @@
             <div class="alert alert-danger">@foreach ($errors->all() as $error)<div>{{ $error }}</div>@endforeach</div>
         @endif
 
+        @if ($sanctionAppliquee->statut === 'appliquee')
+            <div class="alert alert-info">Cette sanction est appliquée et visible comme sanction en cours, mais ses effets définitifs ne sont pas encore comptés. Les points en moins seront pris en compte seulement après le passage au statut « Terminée ».</div>
+        @elseif ($sanctionAppliquee->statut === 'terminee')
+            <div class="alert alert-success">Cette sanction est terminée : elle est verrouillée et ses effets sont actifs.</div>
+        @endif
+
         <div class="card">
             <div class="profile-grid">
                 <div class="profile-row"><span>Année</span><strong>{{ $sanctionAppliquee->inscription?->anneeScolaire?->libelle }}</strong></div>
                 <div class="profile-row"><span>Origine</span><strong>{{ ucfirst($sanctionAppliquee->origine) }}</strong></div>
-                <div class="profile-row"><span>Statut</span><strong>{{ ucfirst($sanctionAppliquee->statut) }}</strong></div>
+                @php
+                    $statutLibelle = match ($sanctionAppliquee->statut) {
+                        'appliquee' => 'Appliquée - en cours, effet non définitif',
+                        'terminee' => 'Terminée - effet actif et verrouillé',
+                        'ignoree' => 'Ignorée - aucun effet',
+                        'annulee' => 'Annulée - aucun effet',
+                        default => 'Proposée - aucun effet',
+                    };
+                @endphp
+                <div class="profile-row"><span>Statut</span><strong>{{ $statutLibelle }}</strong></div>
                 <div class="profile-row"><span>Date application</span><strong>{{ $sanctionAppliquee->date_application?->format('d/m/Y') ?? '-' }}</strong></div>
                 <div class="profile-row"><span>Période</span><strong>{{ $sanctionAppliquee->periode_debut?->format('d/m/Y') ?? '-' }} au {{ $sanctionAppliquee->periode_fin?->format('d/m/Y') ?? '-' }}</strong></div>
                 <div class="profile-row"><span>Nombre d’événements</span><strong>{{ $sanctionAppliquee->nombre_evenements }}</strong></div>

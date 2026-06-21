@@ -168,7 +168,10 @@
                                     <a href="{{ route('absences-retards.show', $evenement) }}" class="btn btn-success">Détail</a>
 
                                     @if (auth()->user()->estGestionnaire() && ! $anneeFermee)
-                                        <a href="{{ route('absences-retards.edit', $evenement) }}" class="btn btn-primary">Modifier</a>
+                                            @if ($evenement->statut !== 'justifiee')
+                                                <a href="{{ route('absences-retards.justifier', $evenement) }}" class="btn btn-warning">Justifier</a>
+                                            @endif 
+                                            <a href="{{ route('absences-retards.edit', $evenement) }}" class="btn btn-primary">Modifier</a>
 
                                         <form
                                             action="{{ route('absences-retards.destroy', $evenement) }}"

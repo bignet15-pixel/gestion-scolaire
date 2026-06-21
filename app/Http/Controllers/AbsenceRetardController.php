@@ -173,6 +173,94 @@ class AbsenceRetardController extends Controller
         return view('absences_retards.show', ['evenement' => $absence_retard]);
     }
 
+
+    public function justifier(AbsenceRetard $absence_retard)
+    {
+        $this->verifierGestionnaire();
+        $absence_retard->load([
+            'inscription.eleve',
+            'inscription.classe.anneeScolaire',
+            'enregistrePar',
+            'statutMisAJourPar',
+        ]);
+        $this->verifierAnneeOuverte($absence_retard->inscription);
+
+        return view('absences_retards.justifier', ['evenement' => $absence_retard]);
+    }
+
+    public function updateJustification(
+        Request $request,
+        AbsenceRetard $absence_retard,
+        SanctionDetectionService $detectionService
+    ) {
+        $this->verifierGestionnaire();
+        $absence_retard->load([
+            'inscription.eleve',
+            'inscription.classe.anneeScolaire',
+            'enregistrePar',
+            'statutMisAJourPar',
+        ]);
+        $this->verifierAnneeOuverte($absence_retard->inscription);
+
+        $validated = $request->validate([
+            'statut' => ['required', Rule::in(AbsenceRetard::STATUTS)],
+            'justification' => ['nullable', 'string', 'max:3000'],
+            'piece_justificative' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:4096'],
+            'commentaire_interne' => ['nullable', 'string', 'max:3000'],
+            'visible_parent' => ['nullable', 'boolean'],
+        ]);
+
+        $donnees = [
+            'statut' => $validated['statut'],
+            'justification' => $validated['justification'] ?? null,
+            'commentaire_interne' => $validated['commentaire_interne'] ?? null,
+            'visible_parent' => $request->boolean('visible_parent'),
+            'statut_mis_a_jour_par' => Auth::id(),
+            'statut_mis_a_jour_le' => now(),
+        ];
+
+        if ($request->hasFile('piece_justificative')) {
+            $ancienFichier = $absence_retard->piece_justificative;
+            $donnees['piece_justificative'] = $request
+                ->file('piece_justificative')
+                ->store('assiduite/justificatifs', 'public');
+
+            if ($ancienFichier) {
+                Storage::disk('public')->delete($ancienFichier);
+            }
+        }
+
+        $absence_retard->update($donnees);
+        $detectionService->detecter($absence_retard->fresh());
+
+        return redirect()
+            ->route('absences-retards.show', $absence_retard)
+            ->with('success', 'Justification mise à jour avec succès.');
+    }
+
+    public function pieceJustificative(AbsenceRetard $absence_retard)
+    {
+        $absence_retard->load([
+            'inscription.classe.anneeScolaire',
+        ]);
+
+        $this->verifierAccesClasse((int) $absence_retard->inscription->classe_id, false);
+
+        abort_unless(
+            ! empty($absence_retard->piece_justificative),
+            404,
+            'Aucune pièce justificative disponible.'
+        );
+
+        abort_unless(
+            Storage::disk('public')->exists($absence_retard->piece_justificative),
+            404,
+            'Pièce justificative introuvable.'
+        );
+
+        return Storage::disk('public')->response($absence_retard->piece_justificative);
+    }
+
     public function edit(AbsenceRetard $absence_retard)
     {
         $this->verifierGestionnaire();

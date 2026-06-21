@@ -130,6 +130,15 @@ Route::middleware(['auth', 'role:gestionnaire'])->group(function () {
 });
 
 Route::middleware(['auth', 'role:gestionnaire,enseignant'])->group(function () {
+    Route::get('/absences-retards/{absence_retard}/justifier', [AbsenceRetardController::class, 'justifier'])
+        ->name('absences-retards.justifier');
+
+    Route::patch('/absences-retards/{absence_retard}/justifier', [AbsenceRetardController::class, 'updateJustification'])
+        ->name('absences-retards.justifier.update');
+
+    Route::get('/absences-retards/{absence_retard}/piece-justificative', [AbsenceRetardController::class, 'pieceJustificative'])
+        ->name('absences-retards.piece-justificative');
+
     Route::resource('absences-retards', AbsenceRetardController::class)
         ->parameters(['absences-retards' => 'absence_retard']);
 

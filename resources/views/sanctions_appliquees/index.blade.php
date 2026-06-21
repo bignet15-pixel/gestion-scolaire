@@ -114,9 +114,17 @@
                     @forelse ($sanctionsAppliquees as $element)
                         @php
                             $statutClass = match ($element->statut) {
-                                'appliquee', 'terminee' => 'badge-success',
+                                'terminee' => 'badge-success',
+                                'appliquee' => 'badge-primary-soft',
                                 'ignoree', 'annulee' => 'badge-muted',
                                 default => 'badge-warning',
+                            };
+                            $statutLibelle = match ($element->statut) {
+                                'appliquee' => 'Appliquée - en cours',
+                                'terminee' => 'Terminée - effet actif',
+                                'ignoree' => 'Ignorée',
+                                'annulee' => 'Annulée',
+                                default => 'Proposée',
                             };
                             $origineClass = $element->origine === 'automatique' ? 'badge-primary-soft' : 'badge-muted';
                             $effetClass = match ($element->type_effet) {
@@ -140,7 +148,7 @@
                             <td>{{ $element->nombre_evenements }}</td>
                             <td><span class="badge {{ $effetClass }}">{{ ucfirst(str_replace('_', ' ', $element->type_effet)) }}</span></td>
                             <td>{{ $element->valeur_effet !== null ? number_format((float) $element->valeur_effet, 2, ',', ' ') : '-' }}</td>
-                            <td><span class="badge {{ $statutClass }}">{{ ucfirst($element->statut) }}</span></td>
+                            <td><span class="badge {{ $statutClass }}">{{ $statutLibelle }}</span></td>
                             <td>
                                 <span class="badge {{ $element->visible_parent ? 'badge-success' : 'badge-muted' }}">
                                     {{ $element->visible_parent ? 'Oui' : 'Non' }}

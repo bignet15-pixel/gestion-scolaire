@@ -78,7 +78,7 @@ class SanctionAppliquee extends Model
         return (float) static::query()
             ->where('inscription_id', $inscriptionId)
             ->where('trimestre_id', $trimestreId)
-            ->where('statut', 'appliquee')
+            ->where('statut', 'terminee')
             ->where('type_effet', 'points_en_moins')
             ->sum('valeur_effet');
     }

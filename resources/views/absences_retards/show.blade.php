@@ -9,6 +9,10 @@
             <div class="detail-actions">
                 <a href="{{ route('absences-retards.index', ['annee_scolaire_id' => $evenement->inscription?->annee_scolaire_id, 'classe_id' => $evenement->inscription?->classe_id]) }}" class="btn">Retour</a>
                 @if (auth()->user()->estGestionnaire() && ! $evenement->inscription?->anneeScolaire?->estFermee())
+                    @if ($evenement->statut !== 'justifiee')
+                        <a href="{{ route('absences-retards.justifier', $evenement) }}" class="btn btn-warning">Justifier</a>
+                    @endif
+
                     <a href="{{ route('absences-retards.edit', $evenement) }}" class="btn btn-primary">Modifier</a>
                 @endif
             </div>
@@ -55,7 +59,9 @@
 
             @if ($evenement->piece_justificative)
                 <div class="detail-footer-actions">
-                    <a href="{{ asset('storage/' . $evenement->piece_justificative) }}" class="btn btn-success" target="_blank">Consulter la pièce justificative</a>
+                    <a href="{{ route('absences-retards.piece-justificative', $evenement) }}" class="btn btn-success" target="_blank">
+                        Consulter la pièce justificative
+                    </a>                
                 </div>
             @endif
         </div>
