@@ -20,22 +20,40 @@ class AbsenceRetardController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+
         $annees = AnneeScolaire::orderByDesc('date_debut')->get();
+
         $selectedAnneeId = $request->input('annee_scolaire_id')
             ?: $this->anneeScolaireCourante()?->id;
+
         $classes = $this->classesAccessibles($user, $selectedAnneeId, false);
+
         $selectedClasseId = $request->filled('classe_id')
             && $classes->contains(fn ($classe) => (string) $classe->id === (string) $request->input('classe_id'))
                 ? $request->input('classe_id')
                 : null;
-        $selectedType = in_array($request->input('type'), AbsenceRetard::TYPES, true)
-            ? $request->input('type')
+
+        /*
+        |--------------------------------------------------------------------------
+        | Filtres type/statut
+        |--------------------------------------------------------------------------
+        | "Tous les types" et "Tous les statuts" doivent donner null,
+        | afin de ne pas filtrer la requête.
+        */
+        $typeInput = $request->input('type');
+        $statutInput = $request->input('statut');
+
+        $selectedType = in_array($typeInput, AbsenceRetard::TYPES, true)
+            ? $typeInput
             : null;
-        $selectedStatut = in_array($request->input('statut'), AbsenceRetard::STATUTS, true)
-            ? $request->input('statut')
+
+        $selectedStatut = in_array($statutInput, AbsenceRetard::STATUTS, true)
+            ? $statutInput
             : null;
+
         $dateDebut = $this->dateFiltre($request->input('date_debut'));
         $dateFin = $this->dateFiltre($request->input('date_fin'));
+
         $classeIds = $classes->pluck('id');
 
         $evenements = AbsenceRetard::with([

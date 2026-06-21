@@ -50,22 +50,58 @@ class SanctionDetectionService
             return;
         }
 
-        $propositionActive = $this->sanctionActivePourPeriode($evenement, $sanction, $periodeDebut, $periodeFin);
-        $resetAt = $this->dernierResetCompteur($evenement, $sanction, $periodeDebut, $periodeFin);
-        $nombreEvenements = $this->nombreEvenementsEligibles($evenement, $sanction, $periodeDebut, $periodeFin, $resetAt);
-        $seuil = (int) $sanction->seuil;
+        $sanctionActive = $this->sanctionActivePourPeriode(
+            $evenement,
+            $sanction,
+            $periodeDebut,
+            $periodeFin
+        );
 
+        $resetAt = $this->dernierResetCompteur(
+            $evenement,
+            $sanction,
+            $periodeDebut,
+            $periodeFin
+        );
+
+        $nombreEvenements = $this->nombreEvenementsEligibles(
+            $evenement,
+            $sanction,
+            $periodeDebut,
+            $periodeFin,
+            $resetAt
+        );
+
+        $seuil = max(1, (int) $sanction->seuil);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Règle métier stricte
+        |--------------------------------------------------------------------------
+        | Une sanction automatique/proposée existe uniquement si le seuil est atteint.
+        | Si le seuil n'est plus atteint après justification, modification ou suppression,
+        | la sanction active est annulée automatiquement.
+        */
         if ($nombreEvenements < $seuil) {
-            if ($propositionActive?->statut === 'proposee') {
-                $this->annulerPropositionObsolete($propositionActive, $nombreEvenements, $seuil);
+            if ($sanctionActive && in_array($sanctionActive->statut, ['proposee', 'appliquee'], true)) {
+                $this->annulerSanctionAutomatiqueInvalide(
+                    $sanctionActive,
+                    $nombreEvenements,
+                    $seuil
+                );
             }
 
             return;
         }
 
-        if ($propositionActive) {
-            if ($propositionActive->statut === 'proposee') {
-                $propositionActive->update([
+        /*
+        |--------------------------------------------------------------------------
+        | Seuil atteint et sanction active existante
+        |--------------------------------------------------------------------------
+        */
+        if ($sanctionActive) {
+            if (in_array($sanctionActive->statut, ['proposee', 'appliquee'], true)) {
+                $sanctionActive->update([
                     'nombre_evenements' => $nombreEvenements,
                 ]);
             }
@@ -73,6 +109,37 @@ class SanctionDetectionService
             return;
         }
 
+        $sanctionAReactiver = $this->sanctionAutomatiqueAnnuleePourReactivation(
+        $evenement,
+        $sanction,
+        $periodeDebut,
+        $periodeFin
+    );
+
+    if ($sanctionAReactiver) {
+        $sanctionAReactiver->update([
+            'trimestre_id' => $trimestre?->id,
+            'date_application' => null,
+            'nombre_evenements' => $nombreEvenements,
+            'motif' => 'Seuil automatique atteint à nouveau : '.$nombreEvenements.' événement(s).',
+            'commentaire_interne' => null,
+            'statut' => 'proposee',
+            'visible_parent' => $sanction->visible_parent_defaut,
+            'type_effet' => $sanction->type_effet,
+            'valeur_effet' => $sanction->valeur_effet,
+            'applique_par' => null,
+            'decision_par' => null,
+            'decision_le' => null,
+        ]);
+
+        return;
+    }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Seuil atteint et aucune sanction active
+        |--------------------------------------------------------------------------
+        */
         SanctionAppliquee::create([
             'inscription_id' => $evenement->inscription_id,
             'sanction_id' => $sanction->id,
@@ -113,22 +180,52 @@ class SanctionDetectionService
     }
 
     private function dernierResetCompteur(
-        AbsenceRetard $evenement,
-        Sanction $sanction,
-        Carbon $periodeDebut,
-        Carbon $periodeFin
+    AbsenceRetard $evenement,
+    Sanction $sanction,
+    Carbon $periodeDebut,
+    Carbon $periodeFin
     ): ?Carbon {
         $decision = SanctionAppliquee::query()
             ->where('inscription_id', $evenement->inscription_id)
             ->where('sanction_id', $sanction->id)
             ->whereDate('periode_debut', $periodeDebut->toDateString())
             ->whereDate('periode_fin', $periodeFin->toDateString())
-            ->whereIn('statut', ['ignoree', 'annulee', 'terminee'])
-            ->whereNotNull('decision_le')
-            ->latest('decision_le')
-            ->value('decision_le');
+            ->where(function ($query) {
+                $query->whereIn('statut', ['ignoree', 'terminee'])
+                    ->orWhere(function ($query) {
+                        $query->where('statut', 'annulee')
+                            ->where(function ($query) {
+                                $query->whereNull('commentaire_interne')
+                                    ->orWhere('commentaire_interne', 'not like', '%Sanction automatique annulée : seuil non atteint après recalcul%');
+                            });
+                    });
+            })
+            ->orderByRaw('COALESCE(decision_le, updated_at) DESC')
+            ->first();
 
-        return $decision ? Carbon::parse($decision) : null;
+        if (! $decision) {
+            return null;
+        }
+
+        return Carbon::parse($decision->decision_le ?? $decision->updated_at);
+    }
+
+    private function sanctionAutomatiqueAnnuleePourReactivation(
+    AbsenceRetard $evenement,
+    Sanction $sanction,
+    Carbon $periodeDebut,
+    Carbon $periodeFin
+    ): ?SanctionAppliquee {
+        return SanctionAppliquee::query()
+            ->where('inscription_id', $evenement->inscription_id)
+            ->where('sanction_id', $sanction->id)
+            ->where('origine', 'automatique')
+            ->where('statut', 'annulee')
+            ->whereDate('periode_debut', $periodeDebut->toDateString())
+            ->whereDate('periode_fin', $periodeFin->toDateString())
+            ->where('commentaire_interne', 'like', '%Sanction automatique annulée : seuil non atteint après recalcul%')
+            ->latest('updated_at')
+            ->first();
     }
 
     private function nombreEvenementsEligibles(
@@ -157,14 +254,23 @@ class SanctionDetectionService
             ->count();
     }
 
-    private function annulerPropositionObsolete(SanctionAppliquee $proposition, int $nombreEvenements, int $seuil): void
-    {
-        $message = 'Proposition annulée automatiquement : seuil non atteint après recalcul '
-            .'('.$nombreEvenements.'/'.$seuil.' événement(s)).';
+    private function annulerSanctionAutomatiqueInvalide(
+        SanctionAppliquee $sanctionAppliquee,
+        int $nombreEvenements,
+        int $seuil
+    ): void {
+        $ancienStatut = $sanctionAppliquee->statut;
 
-        $commentaire = trim(($proposition->commentaire_interne ? $proposition->commentaire_interne."\n" : '').$message);
+        $message = 'Sanction automatique annulée : seuil non atteint après recalcul '
+            .'('.$nombreEvenements.'/'.$seuil.' événement(s)). '
+            .'Ancien statut : '.$ancienStatut.'.';
 
-        $proposition->update([
+        $commentaire = trim(
+            ($sanctionAppliquee->commentaire_interne ? $sanctionAppliquee->commentaire_interne."\n" : '')
+            .$message
+        );
+
+        $sanctionAppliquee->update([
             'statut' => 'annulee',
             'nombre_evenements' => $nombreEvenements,
             'commentaire_interne' => $commentaire,

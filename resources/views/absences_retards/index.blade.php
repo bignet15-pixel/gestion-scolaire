@@ -36,7 +36,7 @@
                 <div class="form-group">
                     <label class="form-label">Type</label>
                     <select name="type" class="form-control">
-                        <option value="">Tous les types</option>
+                        <option value="" @selected(empty($selectedType))>Tous les types</option>
                         <option value="absence" @selected($selectedType === 'absence')>Absence</option>
                         <option value="retard" @selected($selectedType === 'retard')>Retard</option>
                     </select>
@@ -45,7 +45,7 @@
                 <div class="form-group">
                     <label class="form-label">Statut</label>
                     <select name="statut" class="form-control">
-                        <option value="">Tous les statuts</option>
+                        <option value="" @selected(empty($selectedStatut))>Tous les statuts</option>
                         <option value="en_attente" @selected($selectedStatut === 'en_attente')>En attente</option>
                         <option value="justifiee" @selected($selectedStatut === 'justifiee')>Justifiée</option>
                         <option value="non_justifiee" @selected($selectedStatut === 'non_justifiee')>Non justifiée</option>
