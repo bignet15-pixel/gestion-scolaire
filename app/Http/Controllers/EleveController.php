@@ -2,18 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Eleve;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
 use App\Models\AnneeScolaire;
 use App\Models\ClasseMatiereUser;
+use App\Models\Eleve;
 use App\Models\Inscription;
 use App\Models\Trimestre;
 use App\Services\BulletinService;
+use App\Services\ResultatTrimestrielService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class EleveController extends Controller
 {
+    public function __construct(
+        private ResultatTrimestrielService $resultatTrimestrielService
+    ) {}
+
     /**
      * Affiche la liste des élèves avec filtre par année d'inscription.
      */
@@ -24,8 +28,8 @@ class EleveController extends Controller
         $annees = AnneeScolaire::orderByDesc('date_debut')->get();
 
         $eleves = Eleve::with([
-                'inscriptions.classe.anneeScolaire',
-            ])
+            'inscriptions.classe.anneeScolaire',
+        ])
             ->withCount('inscriptions')
             ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
                 $query->whereHas('inscriptions', function ($q) use ($selectedAnneeId) {
@@ -147,7 +151,7 @@ class EleveController extends Controller
         ));
     }
 
-        /**
+    /**
      * Construit les résultats trimestriels de l'élève pour chaque inscription.
      */
     private function construireResultatsEleve($inscriptions)
@@ -176,6 +180,9 @@ class EleveController extends Controller
                 $rang = null;
                 $appreciation = 'Résultats non publiés';
                 $totalPondere = null;
+                $totalPointsEnMoins = 0;
+                $totalPondereFinal = null;
+                $moyenneAvantSanction = null;
 
                 if ($publie) {
                     $notes = $inscription->notes
@@ -185,11 +192,18 @@ class EleveController extends Controller
                         })
                         ->values();
 
-                    $moyenne = $this->calculerMoyenneInscriptionTrimestre(
-                        $inscription,
-                        $trimestre,
+                    $totalPondere = $this->calculerTotalPondereNotes($notes);
+                    $details = $this->resultatTrimestrielService->appliquerRetenues(
+                        $inscription->id,
+                        $trimestre->id,
+                        $totalPondere,
                         $totalCoefficientsClasse
                     );
+                    $moyenne = $details['moyenne_finale'];
+                    $moyenneAvantSanction = $details['moyenne_avant_sanction'];
+                    $totalPondere = $details['total_pondere'];
+                    $totalPointsEnMoins = $details['total_points_en_moins'];
+                    $totalPondereFinal = $details['total_pondere_final'];
 
                     $rang = $this->calculerRangEleveDansClasse(
                         $inscription,
@@ -201,8 +215,6 @@ class EleveController extends Controller
                     $appreciation = $moyenne !== null
                         ? $this->appreciationMoyenne($moyenne)
                         : '-';
-
-                    $totalPondere = $this->calculerTotalPondereNotes($notes);
                 }
 
                 $resultatsTrimestres->push([
@@ -215,9 +227,13 @@ class EleveController extends Controller
                     'notes_manquantes' => $notesManquantes,
                     'notes' => $notes,
                     'moyenne' => $moyenne,
+                    'moyenne_finale' => $moyenne,
                     'rang' => $rang,
                     'appreciation' => $appreciation,
                     'total_pondere' => $totalPondere,
+                    'total_points_en_moins' => $totalPointsEnMoins,
+                    'total_pondere_final' => $totalPondereFinal,
+                    'moyenne_avant_sanction' => $moyenneAvantSanction,
                     'total_coefficients' => $totalCoefficientsClasse,
                 ]);
             }
@@ -252,7 +268,7 @@ class EleveController extends Controller
             $total += $noteSur20 * (float) $evaluation->coefficient;
         }
 
-        return round($total, 2);
+        return $total;
     }
 
     private function calculerResultatAnnuelInscription(
@@ -323,8 +339,7 @@ class EleveController extends Controller
         Inscription $inscription,
         Trimestre $trimestre,
         float $totalCoefficientsClasse
-    ): ?float
-    {
+    ): ?float {
         $inscription->loadMissing('notes.evaluation');
 
         if ($totalCoefficientsClasse <= 0) {
@@ -355,7 +370,12 @@ class EleveController extends Controller
             $totalPoints += $noteSur20 * $coefficient;
         }
 
-        return round($totalPoints / $totalCoefficientsClasse, 2);
+        return $this->resultatTrimestrielService->appliquerRetenues(
+            $inscription->id,
+            $trimestre->id,
+            $totalPoints,
+            $totalCoefficientsClasse
+        )['moyenne_finale'];
     }
 
     /**
@@ -372,9 +392,9 @@ class EleveController extends Controller
         }
 
         $inscriptionsClasse = Inscription::with([
-                'eleve',
-                'notes.evaluation',
-            ])
+            'eleve',
+            'notes.evaluation',
+        ])
             ->where('classe_id', $inscriptionEleve->classe_id)
             ->where('annee_scolaire_id', $inscriptionEleve->annee_scolaire_id)
             ->whereIn('statut', ['actif', 'termine'])
@@ -424,9 +444,9 @@ class EleveController extends Controller
         float $totalCoefficientsClasse
     ): ?int {
         $inscriptionsClasse = Inscription::with([
-                'eleve',
-                'notes.evaluation',
-            ])
+            'eleve',
+            'notes.evaluation',
+        ])
             ->where('classe_id', $inscriptionEleve->classe_id)
             ->where('annee_scolaire_id', $inscriptionEleve->annee_scolaire_id)
             ->whereIn('statut', ['actif', 'termine'])
@@ -595,11 +615,11 @@ class EleveController extends Controller
             ->max() ?? 0;
 
         $numero = $plusGrandNumero + 1;
-        $matricule = 'ELV-' . str_pad($numero, 4, '0', STR_PAD_LEFT);
+        $matricule = 'ELV-'.str_pad($numero, 4, '0', STR_PAD_LEFT);
 
         while (Eleve::withTrashed()->where('matricule', $matricule)->exists()) {
             $numero++;
-            $matricule = 'ELV-' . str_pad($numero, 4, '0', STR_PAD_LEFT);
+            $matricule = 'ELV-'.str_pad($numero, 4, '0', STR_PAD_LEFT);
         }
 
         return $matricule;

@@ -206,7 +206,7 @@
                         @if ($resultatTrimestre['publie'])
                             <div class="trimester-summary-grid">
                                 <div class="trimester-summary-item">
-                                    <span>Moyenne</span>
+                                    <span>Moyenne finale</span>
                                     <strong>
                                         @if ($resultatTrimestre['moyenne'] !== null)
                                             {{ number_format($resultatTrimestre['moyenne'], 2, ',', ' ') }}/20
@@ -232,6 +232,18 @@
                                     <span>Coefficients</span>
                                     <strong>{{ number_format($resultatTrimestre['total_coefficients'], 2, ',', ' ') }}</strong>
                                 </div>
+
+                                @if ($resultatTrimestre['total_points_en_moins'] > 0)
+                                    <div class="trimester-summary-item">
+                                        <span>Retenues discipline / assiduité</span>
+                                        <strong>-{{ number_format($resultatTrimestre['total_points_en_moins'], 2, ',', ' ') }}</strong>
+                                    </div>
+
+                                    <div class="trimester-summary-item">
+                                        <span>Total pondéré final</span>
+                                        <strong>{{ number_format($resultatTrimestre['total_pondere_final'], 2, ',', ' ') }}</strong>
+                                    </div>
+                                @endif
 
                                 <div class="trimester-summary-item trimester-summary-wide">
                                     <span>Appréciation</span>

@@ -12,6 +12,10 @@ use RuntimeException;
 
 class BulletinService
 {
+    public function __construct(
+        private ResultatTrimestrielService $resultatTrimestrielService
+    ) {}
+
     public function nombreEvaluationsAttendues(Inscription $inscription, Trimestre $trimestre): int
     {
         return $this->evaluationsAttendues($inscription, $trimestre)->count();
@@ -59,23 +63,31 @@ class BulletinService
         $notesManquantes = $this->nombreNotesManquantes($inscription, $trimestre);
 
         if ($notesManquantes > 0) {
-            throw new RuntimeException('Le bulletin trimestriel est incomplet : ' . $notesManquantes . ' note(s) attendue(s) ne sont pas encore saisie(s).');
+            throw new RuntimeException('Le bulletin trimestriel est incomplet : '.$notesManquantes.' note(s) attendue(s) ne sont pas encore saisie(s).');
         }
 
         $lignes = $this->lignesTrimestrielles($inscription, $trimestre);
         $totalCoefficients = $this->totalCoefficientsClasse((int) $inscription->classe_id);
         $totalPondere = round($lignes->sum('points'), 2);
-        $moyenne = $totalCoefficients > 0
-            ? round($totalPondere / $totalCoefficients, 2)
-            : null;
+        $resultat = $this->resultatTrimestrielService->appliquerRetenues(
+            $inscription->id,
+            $trimestre->id,
+            $totalPondere,
+            $totalCoefficients
+        );
+        $moyenne = $resultat['moyenne_finale'];
 
         return [
             'inscription' => $inscription,
             'trimestre' => $trimestre,
             'lignes' => $lignes,
-            'total_coefficients' => $totalCoefficients,
-            'total_pondere' => $totalPondere,
+            'total_coefficients' => $resultat['total_coefficients'],
+            'total_pondere' => $resultat['total_pondere'],
+            'total_points_en_moins' => $resultat['total_points_en_moins'],
+            'total_pondere_final' => $resultat['total_pondere_final'],
+            'moyenne_avant_sanction' => $resultat['moyenne_avant_sanction'],
             'moyenne' => $moyenne,
+            'moyenne_finale' => $moyenne,
             'rang' => $this->rangTrimestriel($inscription, $trimestre),
             'appreciation' => $moyenne !== null ? $this->appreciationMoyenne($moyenne) : '-',
             'effectif' => $this->inscriptionsClasse($inscription)->count(),
@@ -170,7 +182,14 @@ class BulletinService
             return null;
         }
 
-        return round($this->lignesTrimestrielles($inscription, $trimestre)->sum('points') / $totalCoefficients, 2);
+        $totalPondere = (float) $this->lignesTrimestrielles($inscription, $trimestre)->sum('points');
+
+        return $this->resultatTrimestrielService->appliquerRetenues(
+            $inscription->id,
+            $trimestre->id,
+            $totalPondere,
+            $totalCoefficients
+        )['moyenne_finale'];
     }
 
     private function rangTrimestriel(Inscription $inscriptionEleve, Trimestre $trimestre): ?int

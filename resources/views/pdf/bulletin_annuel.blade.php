@@ -167,6 +167,8 @@
                 <th class="number">Moyenne</th>
                 <th class="number">Rang</th>
                 <th class="number">Total pondéré</th>
+                <th class="number">Retenue</th>
+                <th class="number">Total final</th>
                 <th>Appréciation</th>
             </tr>
         </thead>
@@ -177,6 +179,10 @@
                     <td class="number">{{ number_format($bulletinTrimestre['moyenne'], 2, ',', ' ') }}/20</td>
                     <td class="number">{{ $bulletinTrimestre['rang'] ?? '-' }}</td>
                     <td class="number">{{ number_format($bulletinTrimestre['total_pondere'], 2, ',', ' ') }}</td>
+                    <td class="number">
+                        {{ $bulletinTrimestre['total_points_en_moins'] > 0 ? '-' . number_format($bulletinTrimestre['total_points_en_moins'], 2, ',', ' ') : '0' }}
+                    </td>
+                    <td class="number">{{ number_format($bulletinTrimestre['total_pondere_final'], 2, ',', ' ') }}</td>
                     <td>{{ $bulletinTrimestre['appreciation'] }}</td>
                 </tr>
             @endforeach

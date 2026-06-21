@@ -147,6 +147,7 @@
                     Seuil de passage : 10/20.
                 </p>
 
+                <div class="table-responsive">
                 <table class="table">
                     <thead>
                         <tr>
@@ -227,6 +228,7 @@
                         @endforelse
                     </tbody>
                 </table>
+                </div>
             </div>
         {{-- Sinon, affichage de l alternative prevue. --}}
         @else
@@ -239,6 +241,7 @@
                     {{ $trimestre?->nom ?? '-' }}
                 </h2>
 
+                <div class="table-responsive">
                 <table class="table">
                     <thead>
                         <tr>
@@ -247,7 +250,10 @@
                             <th>Nom</th>
                             <th>Prénom</th>
                             <th>Nombre de notes</th>
-                            <th>Moyenne / 20</th>
+                            <th>Total pondéré</th>
+                            <th>Retenues</th>
+                            <th>Total final</th>
+                            <th>Moyenne finale / 20</th>
                             <th>Appréciation</th>
                         </tr>
                     </thead>
@@ -261,6 +267,17 @@
                                 <td>{{ $resultat['inscription']->eleve?->nom }}</td>
                                 <td>{{ $resultat['inscription']->eleve?->prenom }}</td>
                                 <td>{{ $resultat['nombre_notes'] }}</td>
+                                <td>{{ number_format($resultat['total_pondere'], 2, ',', ' ') }}</td>
+                                <td>
+                                    @if ($resultat['total_points_en_moins'] > 0)
+                                        <span class="badge badge-danger">
+                                            -{{ number_format($resultat['total_points_en_moins'], 2, ',', ' ') }}
+                                        </span>
+                                    @else
+                                        0
+                                    @endif
+                                </td>
+                                <td>{{ number_format($resultat['total_pondere_final'], 2, ',', ' ') }}</td>
 
                                 <td>
                                     {{-- Condition : $resultat['moyenne'] !== null. --}}
@@ -277,13 +294,14 @@
                         {{-- Message affiche quand la liste est vide. --}}
                         @empty
                             <tr>
-                                <td colspan="7">
+                                <td colspan="10">
                                     Aucun résultat trouvé.
                                 </td>
                             </tr>
                         @endforelse
                     </tbody>
                 </table>
+                </div>
             </div>
         @endif
     </div>

@@ -145,9 +145,11 @@
     <table class="summary">
         <thead>
             <tr>
-                <th>Moyenne</th>
+                <th>Moyenne finale</th>
                 <th>Rang</th>
                 <th>Total pondéré</th>
+                <th>Retenue</th>
+                <th>Total final</th>
                 <th>Total coefficients</th>
                 <th>Appréciation</th>
             </tr>
@@ -157,6 +159,10 @@
                 <td class="number">{{ $moyenne !== null ? number_format($moyenne, 2, ',', ' ') . '/20' : '-' }}</td>
                 <td class="number">{{ $rang ?? '-' }}</td>
                 <td class="number">{{ number_format($total_pondere, 2, ',', ' ') }}</td>
+                <td class="number">
+                    {{ $total_points_en_moins > 0 ? '-' . number_format($total_points_en_moins, 2, ',', ' ') : '0' }}
+                </td>
+                <td class="number">{{ number_format($total_pondere_final, 2, ',', ' ') }}</td>
                 <td class="number">{{ number_format($total_coefficients, 2, ',', ' ') }}</td>
                 <td class="decision">{{ $appreciation }}</td>
             </tr>

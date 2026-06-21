@@ -9,11 +9,16 @@ use App\Models\Eleve;
 use App\Models\Evaluation;
 use App\Models\Inscription;
 use App\Models\Note;
-use Illuminate\Http\Request;
 use App\Models\Trimestre;
+use App\Services\ResultatTrimestrielService;
+use Illuminate\Http\Request;
 
 class InscriptionController extends Controller
 {
+    public function __construct(
+        private ResultatTrimestrielService $resultatTrimestrielService
+    ) {}
+
     /**
      * Affiche la liste des inscriptions avec filtres année / classe
      * et recherche ciblée élève / parent.
@@ -35,12 +40,12 @@ class InscriptionController extends Controller
             ->get();
 
         $inscriptions = Inscription::with([
-                'eleve',
-                'classe.anneeScolaire',
-                'anneeScolaire',
-                'paiements',
-                'notes',
-            ])
+            'eleve',
+            'classe.anneeScolaire',
+            'anneeScolaire',
+            'paiements',
+            'notes',
+        ])
             ->when($selectedAnneeId, function ($query) use ($selectedAnneeId) {
                 $query->where('annee_scolaire_id', $selectedAnneeId);
             })
@@ -49,12 +54,12 @@ class InscriptionController extends Controller
             })
             ->when($search !== '', function ($query) use ($search) {
                 $query->whereHas('eleve', function ($q) use ($search) {
-                    $q->where('matricule', 'like', '%' . $search . '%')
-                        ->orWhere('nom', 'like', '%' . $search . '%')
-                        ->orWhere('prenom', 'like', '%' . $search . '%')
-                        ->orWhere('contact_parent', 'like', '%' . $search . '%')
-                        ->orWhereRaw("CONCAT(nom, ' ', prenom) LIKE ?", ['%' . $search . '%'])
-                        ->orWhereRaw("CONCAT(prenom, ' ', nom) LIKE ?", ['%' . $search . '%']);
+                    $q->where('matricule', 'like', '%'.$search.'%')
+                        ->orWhere('nom', 'like', '%'.$search.'%')
+                        ->orWhere('prenom', 'like', '%'.$search.'%')
+                        ->orWhere('contact_parent', 'like', '%'.$search.'%')
+                        ->orWhereRaw("CONCAT(nom, ' ', prenom) LIKE ?", ['%'.$search.'%'])
+                        ->orWhereRaw("CONCAT(prenom, ' ', nom) LIKE ?", ['%'.$search.'%']);
                 });
             })
             ->join('eleves', 'inscriptions.eleve_id', '=', 'eleves.id')
@@ -73,6 +78,7 @@ class InscriptionController extends Controller
             'search'
         ));
     }
+
     /**
      * Affiche le formulaire de création.
      */
@@ -139,7 +145,7 @@ class InscriptionController extends Controller
             'eleves' => $eleves->map(function ($eleve) {
                 return [
                     'id' => $eleve->id,
-                    'label' => $eleve->matricule . ' — ' . $eleve->nom . ' ' . $eleve->prenom,
+                    'label' => $eleve->matricule.' — '.$eleve->nom.' '.$eleve->prenom,
                 ];
             })->values(),
         ]);
@@ -206,8 +212,6 @@ class InscriptionController extends Controller
         if (empty($validated['frais_attendu'])) {
             $validated['frais_attendu'] = $classe->frais_scolarite;
         }
-
-        
 
         Inscription::create($validated);
 
@@ -375,12 +379,12 @@ class InscriptionController extends Controller
     private function anneesDisponiblesPourInscription(?int $anneeIncluseId = null)
     {
         return AnneeScolaire::where(function ($query) use ($anneeIncluseId) {
-                $query->where('statut', '!=', 'fermee');
+            $query->where('statut', '!=', 'fermee');
 
-                if ($anneeIncluseId) {
-                    $query->orWhere('id', $anneeIncluseId);
-                }
-            })
+            if ($anneeIncluseId) {
+                $query->orWhere('id', $anneeIncluseId);
+            }
+        })
             ->orderByDesc('date_debut')
             ->get();
     }
@@ -434,8 +438,8 @@ class InscriptionController extends Controller
     private function libelleClasseInscription(Classe $classe): string
     {
         return $classe->nom
-            . ' — ' . ($classe->anneeScolaire?->libelle ?? '-')
-            . ' — frais : ' . number_format((float) $classe->frais_scolarite, 0, ',', ' ') . ' FCFA';
+            .' — '.($classe->anneeScolaire?->libelle ?? '-')
+            .' — frais : '.number_format((float) $classe->frais_scolarite, 0, ',', ' ').' FCFA';
     }
 
     /**
@@ -473,10 +477,10 @@ class InscriptionController extends Controller
         }
 
         $ancienneInscription = Inscription::with([
-                'classe.anneeScolaire',
-                'anneeScolaire',
-                'notes.evaluation',
-            ])
+            'classe.anneeScolaire',
+            'anneeScolaire',
+            'notes.evaluation',
+        ])
             ->where('eleve_id', $eleve->id)
             ->whereHas('anneeScolaire', function ($query) use ($anneeDemandee) {
                 $query->where('date_debut', '<', $anneeDemandee->date_debut);
@@ -662,7 +666,12 @@ class InscriptionController extends Controller
             $totalPoints += $noteSur20 * $coefficient;
         }
 
-        return round($totalPoints / $totalCoefficientsClasse, 2);
+        return $this->resultatTrimestrielService->appliquerRetenues(
+            $inscription->id,
+            $trimestre->id,
+            $totalPoints,
+            $totalCoefficientsClasse
+        )['moyenne_finale'];
     }
 
     /**

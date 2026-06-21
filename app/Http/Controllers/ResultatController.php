@@ -7,11 +7,16 @@ use App\Models\Classe;
 use App\Models\ClasseMatiereUser;
 use App\Models\Inscription;
 use App\Models\Trimestre;
+use App\Services\ResultatTrimestrielService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class ResultatController extends Controller
 {
+    public function __construct(
+        private ResultatTrimestrielService $resultatTrimestrielService
+    ) {}
+
     /**
      * Affiche les résultats trimestriels ou annuels.
      */
@@ -153,12 +158,11 @@ class ResultatController extends Controller
         Classe $classe,
         Trimestre $trimestre,
         float $totalCoefficientsClasse
-    )
-    {
+    ) {
         $inscriptions = Inscription::with([
-                'eleve',
-                'notes.evaluation.matiere',
-            ])
+            'eleve',
+            'notes.evaluation.matiere',
+        ])
             ->where('classe_id', $classe->id)
             ->where('annee_scolaire_id', $classe->annee_scolaire_id)
             ->where('statut', 'actif')
@@ -169,15 +173,22 @@ class ResultatController extends Controller
             ->get();
 
         $resultats = $inscriptions->map(function ($inscription) use ($trimestre, $totalCoefficientsClasse) {
-            $moyenne = $this->calculerMoyenneInscriptionTrimestre(
+            $details = $this->calculerResultatInscriptionTrimestre(
                 $inscription,
                 $trimestre,
                 $totalCoefficientsClasse
             );
+            $moyenne = $details['moyenne_finale'];
 
             return [
                 'inscription' => $inscription,
                 'moyenne' => $moyenne,
+                'moyenne_finale' => $moyenne,
+                'moyenne_avant_sanction' => $details['moyenne_avant_sanction'],
+                'total_pondere' => $details['total_pondere'],
+                'total_points_en_moins' => $details['total_points_en_moins'],
+                'total_pondere_final' => $details['total_pondere_final'],
+                'total_coefficients' => $details['total_coefficients'],
                 'appreciation' => $moyenne !== null
                     ? $this->appreciationMoyenne($moyenne)
                     : '-',
@@ -206,12 +217,11 @@ class ResultatController extends Controller
         Classe $classe,
         $trimestres,
         float $totalCoefficientsClasse
-    )
-    {
+    ) {
         $inscriptions = Inscription::with([
-                'eleve',
-                'notes.evaluation',
-            ])
+            'eleve',
+            'notes.evaluation',
+        ])
             ->where('classe_id', $classe->id)
             ->where('annee_scolaire_id', $classe->annee_scolaire_id)
             ->where('statut', 'actif')
@@ -269,12 +279,28 @@ class ResultatController extends Controller
         Inscription $inscription,
         Trimestre $trimestre,
         float $totalCoefficientsClasse
-    ): ?float
-    {
+    ): ?float {
+        return $this->calculerResultatInscriptionTrimestre(
+            $inscription,
+            $trimestre,
+            $totalCoefficientsClasse
+        )['moyenne_finale'];
+    }
+
+    private function calculerResultatInscriptionTrimestre(
+        Inscription $inscription,
+        Trimestre $trimestre,
+        float $totalCoefficientsClasse
+    ): array {
         $inscription->loadMissing('notes.evaluation');
 
         if ($totalCoefficientsClasse <= 0) {
-            return null;
+            return $this->resultatTrimestrielService->appliquerRetenues(
+                $inscription->id,
+                $trimestre->id,
+                0,
+                $totalCoefficientsClasse
+            );
         }
 
         $totalPoints = 0;
@@ -301,7 +327,12 @@ class ResultatController extends Controller
             $totalPoints += $noteSur20 * $coefficient;
         }
 
-        return round($totalPoints / $totalCoefficientsClasse, 2);
+        return $this->resultatTrimestrielService->appliquerRetenues(
+            $inscription->id,
+            $trimestre->id,
+            $totalPoints,
+            $totalCoefficientsClasse
+        );
     }
 
     /**
@@ -311,8 +342,7 @@ class ResultatController extends Controller
         $resultats,
         string $cleMoyenne,
         float $totalCoefficientsClasse
-    ): array
-    {
+    ): array {
         $moyennes = $resultats
             ->pluck($cleMoyenne)
             ->filter(function ($moyenne) {
@@ -378,6 +408,7 @@ class ResultatController extends Controller
             if ($resultat['moyenne'] === null) {
                 $resultat['rang'] = null;
                 $classement->push($resultat);
+
                 continue;
             }
 
@@ -412,6 +443,7 @@ class ResultatController extends Controller
             if ($resultat['moyenne_annuelle'] === null) {
                 $resultat['rang_annuel'] = null;
                 $classement->push($resultat);
+
                 continue;
             }
 
@@ -456,6 +488,7 @@ class ResultatController extends Controller
 
         return 'Très insuffisant';
     }
+
     /**
      * Décision annuelle.
      */
