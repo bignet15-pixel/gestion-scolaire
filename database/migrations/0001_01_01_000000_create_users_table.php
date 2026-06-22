@@ -29,7 +29,7 @@ return new class extends Migration
             $table->string('password');
 
             // Rôle de l'utilisateur dans le système.
-            $table->enum('role', ['gestionnaire', 'enseignant'])->default('enseignant');
+            $table->enum('role', ['gestionnaire', 'enseignant', 'parent'])->default('enseignant');
 
             // Informations complémentaires.
             $table->string('adresse')->nullable();

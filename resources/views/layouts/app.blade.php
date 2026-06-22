@@ -64,6 +64,10 @@
                             Enseignants
                         </a>
 
+                        <a href="{{ route('parents.index') }}" class="sidebar-link{{ $active('parents.*') }}">
+                            Parents
+                        </a>
+
                         <a href="{{ route('matieres.index') }}" class="sidebar-link{{ $active('matieres.*') }}">
                             Matières
                         </a>
@@ -159,6 +163,15 @@
                             Sanctions appliquées
                         </a>
                     @endif
+
+                    {{-- Condition : auth()->user()->estParent(). --}}
+                    @if (auth()->user()->estParent())
+                        <div class="sidebar-section">Espace parent</div>
+
+                        <a href="{{ route('dashboard') }}" class="sidebar-link{{ $active('dashboard') }}">
+                            Mes enfants
+                        </a>
+                    @endif
                 @endauth
             </nav>
         </aside>
@@ -170,7 +183,13 @@
                     <h1 class="page-title">
                         {{-- Contenu reserve aux utilisateurs connectes. --}}
                         @auth
-                            {{ auth()->user()->estGestionnaire() ? 'Espace gestionnaire' : 'Espace enseignant' }}
+                            @if (auth()->user()->estGestionnaire())
+                                Espace gestionnaire
+                            @elseif (auth()->user()->estEnseignant())
+                                Espace enseignant
+                            @elseif (auth()->user()->estParent())
+                                Espace parent
+                            @endif
                         {{-- Sinon, affichage de l alternative prevue. --}}
                         @else
                         Bangre Zaaka

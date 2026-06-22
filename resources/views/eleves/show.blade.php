@@ -31,6 +31,12 @@
             </div>
         @endif
 
+        @if (session('success'))
+            <div class="alert alert-success">
+                {{ session('success') }}
+            </div>
+        @endif
+
         <div class="student-profile-card">
             <div class="student-photo-box">
                 {{-- Condition : $eleve->photo. --}}
@@ -75,6 +81,120 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div class="card">
+            <h2>Parents liés</h2>
+
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Parent</th>
+                            <th>Contact</th>
+                            <th>Lien</th>
+                            <th>Responsable principal</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @forelse ($eleve->parents as $parent)
+                            <tr>
+                                <td>
+                                    {{ $parent->nom }} {{ $parent->prenom }}
+                                    <br>
+                                    <small>{{ $parent->matricule }}</small>
+                                </td>
+                                <td>
+                                    {{ $parent->phone ?? '-' }}
+                                    <br>
+                                    <small>{{ $parent->email }}</small>
+                                </td>
+                                <td>{{ $parent->pivot->lien_parente ?? '-' }}</td>
+                                <td>
+                                    @if ($parent->pivot->responsable_principal)
+                                        <span class="badge badge-success">Oui</span>
+                                    @else
+                                        <span class="badge badge-muted">Non</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    <form
+                                        action="{{ route('eleves.parents.destroy', [$eleve, $parent->id]) }}"
+                                        method="POST"
+                                        data-confirm="Voulez-vous retirer ce parent de cet élève ?"
+                                        data-confirm-title="Retrait d’un parent"
+                                        data-confirm-button="Retirer"
+                                    >
+                                        @csrf
+                                        @method('DELETE')
+
+                                        <button type="submit" class="btn btn-danger">
+                                            Retirer
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5">
+                                    Aucun compte parent n’est lié à cet élève.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <hr>
+
+            <h3>Associer un parent existant</h3>
+
+            <form action="{{ route('eleves.parents.store', $eleve) }}" method="POST" class="form-grid">
+                @csrf
+
+                <div class="form-group">
+                    <label class="form-label">Compte parent</label>
+                    <select name="parent_id" class="form-control" required>
+                        <option value="">Choisir un parent</option>
+
+                        @foreach ($parentsDisponibles as $parentDisponible)
+                            <option value="{{ $parentDisponible->id }}" @selected(old('parent_id') == $parentDisponible->id)>
+                                {{ $parentDisponible->nom }} {{ $parentDisponible->prenom }} — {{ $parentDisponible->phone ?? $parentDisponible->email }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Lien de parenté</label>
+                    <input
+                        type="text"
+                        name="lien_parente"
+                        class="form-control"
+                        value="{{ old('lien_parente') }}"
+                        placeholder="Père, mère, tuteur..."
+                    >
+                </div>
+
+                <div class="form-group form-group-full">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="responsable_principal" value="1" @checked(old('responsable_principal'))>
+                        Définir comme responsable principal
+                    </label>
+                </div>
+
+                <div class="form-actions form-group-full">
+                    <a href="{{ route('parents.create') }}" class="btn">
+                        Créer un parent
+                    </a>
+
+                    <button type="submit" class="btn btn-primary">
+                        Associer
+                    </button>
+                </div>
+            </form>
         </div>
 
         <div class="card">

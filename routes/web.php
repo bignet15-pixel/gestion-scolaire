@@ -7,6 +7,7 @@ use App\Http\Controllers\ClasseController;
 use App\Http\Controllers\ClasseMatiereUserController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EleveController;
+use App\Http\Controllers\EleveParentController;
 use App\Http\Controllers\EmploiDuTempsController;
 use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\EvaluationController;
@@ -15,6 +16,8 @@ use App\Http\Controllers\InscriptionController;
 use App\Http\Controllers\MatiereController;
 use App\Http\Controllers\NoteController;
 use App\Http\Controllers\PaiementController;
+use App\Http\Controllers\ParentController;
+use App\Http\Controllers\ParentEleveController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ResultatController;
 use App\Http\Controllers\SanctionAppliqueeController;
@@ -67,6 +70,10 @@ Route::middleware(['auth', 'role:gestionnaire'])->group(function () {
     Route::resource('enseignants', EnseignantController::class)
         ->parameters(['enseignants' => 'enseignant']);
 
+    Route::resource('parents', ParentController::class)
+        ->except(['show'])
+        ->parameters(['parents' => 'parent']);
+
     Route::resource('affectations', ClasseMatiereUserController::class)
         ->except(['show'])
         ->parameters(['affectations' => 'affectation']);
@@ -82,6 +89,12 @@ Route::middleware(['auth', 'role:gestionnaire'])->group(function () {
 
     Route::resource('eleves', EleveController::class)
         ->parameters(['eleves' => 'eleve']);
+
+    Route::post('/eleves/{eleve}/parents', [EleveParentController::class, 'store'])
+        ->name('eleves.parents.store');
+
+    Route::delete('/eleves/{eleve}/parents/{parent}', [EleveParentController::class, 'destroy'])
+        ->name('eleves.parents.destroy');
 
     Route::get('/inscriptions/{inscription}/trimestres/{trimestre}/bulletin', [BulletinController::class, 'trimestriel'])
         ->name('bulletins.trimestriel');
@@ -183,5 +196,13 @@ Route::middleware(['auth', 'role:enseignant'])->group(function () {
     Route::get('/mes-classes/{classe}/eleves/pdf', [ClasseController::class, 'imprimerEleves'])
         ->name('enseignant.classes.eleves-pdf');
 });
+
+Route::middleware(['auth', 'role:parent'])
+    ->prefix('parent')
+    ->name('parent.')
+    ->group(function () {
+        Route::get('/eleves/{eleve}', [ParentEleveController::class, 'show'])
+            ->name('eleves.show');
+    });
 
 require __DIR__.'/auth.php';

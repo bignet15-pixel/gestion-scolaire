@@ -6,6 +6,7 @@ use App\Models\AnneeScolaire;
 use App\Models\Eleve;
 use App\Models\Inscription;
 use App\Models\Trimestre;
+use App\Models\User;
 use App\Services\BulletinService;
 use App\Services\ResultatTrimestrielService;
 use Illuminate\Http\Request;
@@ -138,6 +139,12 @@ class EleveController extends Controller
             ->get();
 
         $eleve->setRelation('inscriptions', $inscriptionsFiltrees);
+        $eleve->load('parents');
+
+        $parentsDisponibles = User::where('role', 'parent')
+            ->orderBy('nom')
+            ->orderBy('prenom')
+            ->get();
 
         $resultatsParInscription = $this->construireResultatsEleve($inscriptionsFiltrees);
 
@@ -146,7 +153,8 @@ class EleveController extends Controller
             'resultatsParInscription',
             'inscriptionsOptions',
             'selectedAnneeId',
-            'selectedClasseId'
+            'selectedClasseId',
+            'parentsDisponibles'
         ));
     }
 

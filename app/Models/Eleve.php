@@ -62,4 +62,13 @@ class Eleve extends Model
     {
         return $this->nom . ' ' . $this->prenom;
     }
+
+
+
+    public function parents()
+    {
+        return $this->belongsToMany(User::class, 'eleve_parent', 'eleve_id', 'parent_id')
+            ->withPivot(['lien_parente', 'responsable_principal'])
+            ->withTimestamps();
+    }
 }

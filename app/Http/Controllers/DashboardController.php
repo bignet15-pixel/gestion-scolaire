@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Classe;
 use App\Models\ClasseMatiereUser;
+use App\Models\AbsenceRetard;
 use App\Models\EmploiDuTemps;
 use App\Models\Evaluation;
 use App\Models\Inscription;
 use App\Models\Paiement;
+use App\Models\SanctionAppliquee;
 use App\Models\User;
 use App\Models\AnneeScolaire;
 use Carbon\Carbon;
@@ -31,7 +33,72 @@ class DashboardController extends Controller
             return $this->dashboardEnseignant($user, $request);
         }
 
+        if ($user->estParent()) {
+            return $this->dashboardParent($user);
+        }
+
         abort(403, 'Rôle non autorisé.');
+    }
+
+    /**
+     * Dashboard personnel du parent connecté.
+     */
+    private function dashboardParent(User $user)
+    {
+        $enfants = $user->enfants()
+            ->with([
+                'inscriptions.classe.anneeScolaire',
+                'inscriptions.paiements',
+            ])
+            ->orderBy('nom')
+            ->orderBy('prenom')
+            ->get();
+
+        $inscriptions = $enfants
+            ->flatMap(fn ($eleve) => $eleve->inscriptions)
+            ->values();
+
+        $inscriptionIds = $inscriptions->pluck('id');
+
+        $totalFraisAttendus = (float) $inscriptions->sum('frais_attendu');
+
+        $totalFraisCollectes = (float) $inscriptions->sum(function ($inscription) {
+            return $inscription->paiements->sum('montant');
+        });
+
+        $totalRestant = max(0, $totalFraisAttendus - $totalFraisCollectes);
+
+        $absencesRetards = AbsenceRetard::with([
+                'inscription.eleve',
+                'inscription.classe',
+            ])
+            ->whereIn('inscription_id', $inscriptionIds)
+            ->where('visible_parent', true)
+            ->orderByDesc('date_debut')
+            ->limit(8)
+            ->get();
+
+        $sanctions = SanctionAppliquee::with([
+                'inscription.eleve',
+                'inscription.classe',
+                'sanction',
+                'trimestre',
+            ])
+            ->whereIn('inscription_id', $inscriptionIds)
+            ->where('visible_parent', true)
+            ->orderByDesc('created_at')
+            ->limit(8)
+            ->get();
+
+        return view('dashboard.parent', compact(
+            'enfants',
+            'inscriptions',
+            'totalFraisAttendus',
+            'totalFraisCollectes',
+            'totalRestant',
+            'absencesRetards',
+            'sanctions'
+        ));
     }
 
     /**

@@ -94,4 +94,16 @@ class User extends Authenticatable
     {
         return $this->role === 'enseignant';
     }
+
+    public function enfants()
+    {
+        return $this->belongsToMany(Eleve::class, 'eleve_parent', 'parent_id', 'eleve_id')
+            ->withPivot(['lien_parente', 'responsable_principal'])
+            ->withTimestamps();
+    }
+
+    public function estParent(): bool
+    {
+        return $this->role === 'parent';
+    } 
 }
