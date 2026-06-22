@@ -188,6 +188,10 @@
                         <a href="{{ route('parent.paiements-declares.index') }}" class="sidebar-link{{ $active('parent.paiements-declares.*') }}">
                             Paiements déclarés
                         </a>
+
+                        <a href="{{ route('profile.edit') }}" class="sidebar-link{{ $active('profile.edit') }}">
+                            Mon compte
+                        </a>
                     @endif
                 @endauth
             </nav>
@@ -221,6 +225,10 @@
                             <strong>{{ auth()->user()->name }}</strong>
                             <span>{{ auth()->user()->role }}</span>
                         </div>
+
+                        <a href="{{ route('profile.edit') }}" class="btn">
+                            Mon compte
+                        </a>
 
                         <form method="POST" action="{{ route('logout') }}">
                             {{-- Jeton de securite du formulaire. --}}

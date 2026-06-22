@@ -1,52 +1,73 @@
-{{-- Vue Blade : resources/views/profile/partials/update-password-form.blade.php --}}
 <section>
-    <header>
-        <h2 class="text-lg font-medium text-gray-900">
-            {{ __('Update Password') }}
-        </h2>
-
-        <p class="mt-1 text-sm text-gray-600">
-            {{ __('Ensure your account is using a long, random password to stay secure.') }}
+    <header class="profile-form-header">
+        <h2>Modifier le mot de passe</h2>
+        <p>
+            Saisissez votre mot de passe actuel, puis choisissez un nouveau mot de passe sécurisé.
         </p>
     </header>
 
-    <form method="post" action="{{ route('password.update') }}" class="mt-6 space-y-6">
-        {{-- Jeton de securite du formulaire. --}}
+    <form method="post" action="{{ route('password.update') }}" class="form-stack">
         @csrf
-        {{-- Methode HTTP du formulaire. --}}
         @method('put')
 
-        <div>
-            <x-input-label for="update_password_current_password" :value="__('Current Password')" />
-            <x-text-input id="update_password_current_password" name="current_password" type="password" class="mt-1 block w-full" autocomplete="current-password" />
-            <x-input-error :messages="$errors->updatePassword->get('current_password')" class="mt-2" />
+        <div class="form-group">
+            <label for="update_password_current_password" class="form-label">
+                Mot de passe actuel
+            </label>
+            <input
+                id="update_password_current_password"
+                name="current_password"
+                type="password"
+                class="form-control"
+                autocomplete="current-password"
+                required
+            >
+
+            @foreach ($errors->updatePassword->get('current_password') as $message)
+                <p class="form-error">{{ $message }}</p>
+            @endforeach
         </div>
 
-        <div>
-            <x-input-label for="update_password_password" :value="__('New Password')" />
-            <x-text-input id="update_password_password" name="password" type="password" class="mt-1 block w-full" autocomplete="new-password" />
-            <x-input-error :messages="$errors->updatePassword->get('password')" class="mt-2" />
+        <div class="form-group">
+            <label for="update_password_password" class="form-label">
+                Nouveau mot de passe
+            </label>
+            <input
+                id="update_password_password"
+                name="password"
+                type="password"
+                class="form-control"
+                autocomplete="new-password"
+                required
+            >
+
+            @foreach ($errors->updatePassword->get('password') as $message)
+                <p class="form-error">{{ $message }}</p>
+            @endforeach
         </div>
 
-        <div>
-            <x-input-label for="update_password_password_confirmation" :value="__('Confirm Password')" />
-            <x-text-input id="update_password_password_confirmation" name="password_confirmation" type="password" class="mt-1 block w-full" autocomplete="new-password" />
-            <x-input-error :messages="$errors->updatePassword->get('password_confirmation')" class="mt-2" />
+        <div class="form-group">
+            <label for="update_password_password_confirmation" class="form-label">
+                Confirmer le nouveau mot de passe
+            </label>
+            <input
+                id="update_password_password_confirmation"
+                name="password_confirmation"
+                type="password"
+                class="form-control"
+                autocomplete="new-password"
+                required
+            >
+
+            @foreach ($errors->updatePassword->get('password_confirmation') as $message)
+                <p class="form-error">{{ $message }}</p>
+            @endforeach
         </div>
 
-        <div class="flex items-center gap-4">
-            <x-primary-button>{{ __('Save') }}</x-primary-button>
-
-            {{-- Condition : session('status') === 'password-updated'. --}}
-            @if (session('status') === 'password-updated')
-                <p
-                    x-data="{ show: true }"
-                    x-show="show"
-                    x-transition
-                    x-init="setTimeout(() => show = false, 2000)"
-                    class="text-sm text-gray-600"
-                >{{ __('Saved.') }}</p>
-            @endif
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                Modifier le mot de passe
+            </button>
         </div>
     </form>
 </section>

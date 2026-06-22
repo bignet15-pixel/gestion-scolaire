@@ -1,71 +1,145 @@
-{{-- Vue Blade : resources/views/profile/partials/update-profile-information-form.blade.php --}}
 <section>
-    <header>
-        <h2 class="text-lg font-medium text-gray-900">
-            {{ __('Profile Information') }}
-        </h2>
-
-        <p class="mt-1 text-sm text-gray-600">
-            {{ __("Update your account's profile information and email address.") }}
+    <header class="profile-form-header">
+        <h2>Informations du compte</h2>
+        <p>
+            Ces informations permettent d’identifier votre compte dans le système.
+            Le matricule et le rôle restent gérés par l’administration.
         </p>
     </header>
 
     <form id="send-verification" method="post" action="{{ route('verification.send') }}">
-        {{-- Jeton de securite du formulaire. --}}
         @csrf
     </form>
 
-    <form method="post" action="{{ route('profile.update') }}" class="mt-6 space-y-6">
-        {{-- Jeton de securite du formulaire. --}}
+    <form method="post" action="{{ route('profile.update') }}" class="form-stack">
         @csrf
-        {{-- Methode HTTP du formulaire. --}}
         @method('patch')
 
-        <div>
-            <x-input-label for="name" :value="__('Name')" />
-            <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name', $user->name)" required autofocus autocomplete="name" />
-            <x-input-error class="mt-2" :messages="$errors->get('name')" />
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="prenom" class="form-label">Prénom</label>
+                <input
+                    id="prenom"
+                    name="prenom"
+                    type="text"
+                    class="form-control"
+                    value="{{ old('prenom', $user->prenom) }}"
+                    required
+                    autocomplete="given-name"
+                >
+
+                @foreach ($errors->get('prenom') as $message)
+                    <p class="form-error">{{ $message }}</p>
+                @endforeach
+            </div>
+
+            <div class="form-group">
+                <label for="nom" class="form-label">Nom</label>
+                <input
+                    id="nom"
+                    name="nom"
+                    type="text"
+                    class="form-control"
+                    value="{{ old('nom', $user->nom) }}"
+                    required
+                    autocomplete="family-name"
+                >
+
+                @foreach ($errors->get('nom') as $message)
+                    <p class="form-error">{{ $message }}</p>
+                @endforeach
+            </div>
+
+            <div class="form-group">
+                <label for="email" class="form-label">Adresse email</label>
+                <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    class="form-control"
+                    value="{{ old('email', $user->email) }}"
+                    required
+                    autocomplete="username"
+                >
+
+                @foreach ($errors->get('email') as $message)
+                    <p class="form-error">{{ $message }}</p>
+                @endforeach
+            </div>
+
+            <div class="form-group">
+                <label for="phone" class="form-label">Téléphone</label>
+                <input
+                    id="phone"
+                    name="phone"
+                    type="text"
+                    class="form-control"
+                    value="{{ old('phone', $user->phone) }}"
+                    autocomplete="tel"
+                    placeholder="Ex : +22670000000"
+                >
+
+                @foreach ($errors->get('phone') as $message)
+                    <p class="form-error">{{ $message }}</p>
+                @endforeach
+            </div>
+
+            <div class="form-group">
+                <label for="sexe" class="form-label">Sexe</label>
+                <select id="sexe" name="sexe" class="form-control">
+                    <option value="">Non renseigné</option>
+                    <option value="M" @selected(old('sexe', $user->sexe) === 'M')>Masculin</option>
+                    <option value="F" @selected(old('sexe', $user->sexe) === 'F')>Féminin</option>
+                </select>
+
+                @foreach ($errors->get('sexe') as $message)
+                    <p class="form-error">{{ $message }}</p>
+                @endforeach
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Rôle</label>
+                <input type="text" class="form-control" value="{{ ucfirst($user->role) }}" disabled>
+                <small>Le rôle est modifiable uniquement par le gestionnaire.</small>
+            </div>
+
+            <div class="form-group form-group-full">
+                <label for="adresse" class="form-label">Adresse</label>
+                <input
+                    id="adresse"
+                    name="adresse"
+                    type="text"
+                    class="form-control"
+                    value="{{ old('adresse', $user->adresse) }}"
+                    autocomplete="street-address"
+                    placeholder="Ex : Ouagadougou, secteur..."
+                >
+
+                @foreach ($errors->get('adresse') as $message)
+                    <p class="form-error">{{ $message }}</p>
+                @endforeach
+            </div>
         </div>
 
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" name="email" type="email" class="mt-1 block w-full" :value="old('email', $user->email)" required autocomplete="username" />
-            <x-input-error class="mt-2" :messages="$errors->get('email')" />
+        @if ($user instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! $user->hasVerifiedEmail())
+            <div class="alert alert-warning">
+                Votre adresse email n’est pas encore vérifiée.
+                <button form="send-verification" class="link-button" type="submit">
+                    Renvoyer le lien de vérification
+                </button>
+            </div>
 
-            {{-- Condition : $user instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! $user->hasVerifiedEmail(). --}}
-            @if ($user instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! $user->hasVerifiedEmail())
-                <div>
-                    <p class="text-sm mt-2 text-gray-800">
-                        {{ __('Your email address is unverified.') }}
-
-                        <button form="send-verification" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                            {{ __('Click here to re-send the verification email.') }}
-                        </button>
-                    </p>
-
-                    {{-- Condition : session('status') === 'verification-link-sent'. --}}
-                    @if (session('status') === 'verification-link-sent')
-                        <p class="mt-2 font-medium text-sm text-green-600">
-                            {{ __('A new verification link has been sent to your email address.') }}
-                        </p>
-                    @endif
+            @if (session('status') === 'verification-link-sent')
+                <div class="alert alert-success">
+                    Un nouveau lien de vérification a été envoyé à votre adresse email.
                 </div>
             @endif
-        </div>
+        @endif
 
-        <div class="flex items-center gap-4">
-            <x-primary-button>{{ __('Save') }}</x-primary-button>
-
-            {{-- Condition : session('status') === 'profile-updated'. --}}
-            @if (session('status') === 'profile-updated')
-                <p
-                    x-data="{ show: true }"
-                    x-show="show"
-                    x-transition
-                    x-init="setTimeout(() => show = false, 2000)"
-                    class="text-sm text-gray-600"
-                >{{ __('Saved.') }}</p>
-            @endif
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                Enregistrer les informations
+            </button>
         </div>
     </form>
 </section>
