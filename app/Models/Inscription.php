@@ -62,6 +62,17 @@ class Inscription extends Model
         return $this->hasMany(SanctionAppliquee::class);
     }
 
+
+    public function paiementsDeclares()
+    {
+        return $this->hasMany(PaiementDeclare::class);
+    }
+
+    public function demandesReinscriptionAnciennes()
+    {
+        return $this->hasMany(DemandeReinscription::class, 'ancienne_inscription_id');
+    }
+
     public function totalPaye(): float
     {
         return (float) $this->paiements()->sum('montant');

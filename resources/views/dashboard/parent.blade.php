@@ -1,6 +1,25 @@
 <x-app-layout>
     <div class="container">
-        <h1>Tableau de bord parent</h1>
+        @if (session('success'))
+            <div class="alert alert-success">{{ session('success') }}</div>
+        @endif
+
+        <div class="detail-header-card">
+            <div>
+                <div class="detail-kicker">Espace parent</div>
+                <h1>Tableau de bord parent</h1>
+                <p>
+                    Les indicateurs financiers ci-dessous concernent uniquement
+                    l’année scolaire active : {{ $anneeActive?->libelle ?? 'non définie' }}.
+                </p>
+            </div>
+
+            <div class="detail-actions">
+                <a href="{{ route('parent.paiements-declares.index') }}" class="btn">
+                    Historique paiements déclarés
+                </a>
+            </div>
+        </div>
 
         <div class="dashboard-grid">
             <div class="stat-card">
@@ -33,9 +52,10 @@
                         <tr>
                             <th>Matricule</th>
                             <th>Élève</th>
-                            <th>Classe actuelle</th>
-                            <th>Lien</th>
-                            <th>Responsable principal</th>
+                            <th>Classe année active</th>
+                            <th>Frais attendus</th>
+                            <th>Payé</th>
+                            <th>Reste</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -43,27 +63,26 @@
                     <tbody>
                         @forelse ($enfants as $enfant)
                             @php
-                                $derniereInscription = $enfant->inscriptions
-                                    ->sortByDesc('date_inscription')
-                                    ->first();
+                                $inscriptionActive = $enfant->inscriptions->first();
+                                $paye = $inscriptionActive?->paiements?->sum('montant') ?? 0;
+                                $reste = max(0, (float) ($inscriptionActive?->frais_attendu ?? 0) - (float) $paye);
                             @endphp
 
                             <tr>
                                 <td>{{ $enfant->matricule }}</td>
-                                <td>{{ $enfant->nom }} {{ $enfant->prenom }}</td>
                                 <td>
-                                    {{ $derniereInscription?->classe?->nom ?? '-' }}
+                                    {{ $enfant->nom }} {{ $enfant->prenom }}
                                     <br>
-                                    <small>{{ $derniereInscription?->anneeScolaire?->libelle ?? '-' }}</small>
+                                    <small>{{ $enfant->pivot->lien_parente ?? '-' }}</small>
                                 </td>
-                                <td>{{ $enfant->pivot->lien_parente ?? '-' }}</td>
                                 <td>
-                                    @if ($enfant->pivot->responsable_principal)
-                                        <span class="badge badge-success">Oui</span>
-                                    @else
-                                        <span class="badge badge-muted">Non</span>
-                                    @endif
+                                    {{ $inscriptionActive?->classe?->nom ?? '-' }}
+                                    <br>
+                                    <small>{{ $inscriptionActive?->anneeScolaire?->libelle ?? '-' }}</small>
                                 </td>
+                                <td>{{ number_format($inscriptionActive?->frais_attendu ?? 0, 0, ',', ' ') }} FCFA</td>
+                                <td>{{ number_format($paye, 0, ',', ' ') }} FCFA</td>
+                                <td>{{ number_format($reste, 0, ',', ' ') }} FCFA</td>
                                 <td>
                                     <a href="{{ route('parent.eleves.show', $enfant) }}" class="btn btn-primary">
                                         Voir détail
@@ -72,9 +91,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6">
-                                    Aucun élève n’est lié à votre compte.
-                                </td>
+                                <td colspan="7">Aucun élève n’est lié à votre compte.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -95,6 +112,7 @@
                             <th>Date</th>
                             <th>Période</th>
                             <th>Statut</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
 
@@ -106,13 +124,56 @@
                                 <td>{{ $absenceRetard->libelleType() }}</td>
                                 <td>{{ $absenceRetard->date_debut?->format('d/m/Y') }}</td>
                                 <td>{{ $absenceRetard->libellePeriode() }}</td>
-                                <td>{{ $absenceRetard->libelleStatut() }}</td>
+                                <td>
+                                    <span class="badge {{ $absenceRetard->statut === 'justifiee' ? 'badge-success' : 'badge-warning' }}">
+                                        {{ $absenceRetard->libelleStatut() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="{{ route('parent.eleves.show', $absenceRetard->inscription->eleve) }}#assiduite" class="btn">
+                                        Voir / justifier
+                                    </a>
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6">
-                                    Aucune absence ou retard visible.
-                                </td>
+                                <td colspan="7">Aucune absence ou retard visible.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Paiements déclarés récents</h2>
+
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Élève</th>
+                            <th>Classe</th>
+                            <th>Montant</th>
+                            <th>Mode</th>
+                            <th>Statut</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @forelse ($paiementsDeclares as $paiementDeclare)
+                            <tr>
+                                <td>{{ $paiementDeclare->inscription?->eleve?->nom }} {{ $paiementDeclare->inscription?->eleve?->prenom }}</td>
+                                <td>{{ $paiementDeclare->inscription?->classe?->nom ?? '-' }}</td>
+                                <td>{{ number_format($paiementDeclare->montant, 0, ',', ' ') }} FCFA</td>
+                                <td>{{ str_replace('_', ' ', $paiementDeclare->mode_paiement) }}</td>
+                                <td>{{ $paiementDeclare->libelleStatut() }}</td>
+                                <td>{{ $paiementDeclare->created_at?->format('d/m/Y H:i') }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6">Aucun paiement déclaré récemment.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -146,9 +207,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5">
-                                    Aucune sanction visible.
-                                </td>
+                                <td colspan="5">Aucune sanction visible.</td>
                             </tr>
                         @endforelse
                     </tbody>

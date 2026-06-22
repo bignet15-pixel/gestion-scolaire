@@ -126,6 +126,16 @@ class DemandeReinscription extends Model
         };
     }
 
+
+    public function libelleDecisionSysteme(): string
+    {
+        return match ($this->decision_systeme) {
+            self::DECISION_REDOUBLEMENT_OBLIGATOIRE => 'Redoublement obligatoire',
+            self::DECISION_PASSAGE_AUTORISE => 'Passage autorisé',
+            default => 'Non disponible',
+        };
+    }
+
     public function libelleStatut(): string
     {
         return match ($this->statut) {

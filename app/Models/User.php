@@ -106,4 +106,21 @@ class User extends Authenticatable
     {
         return $this->role === 'parent';
     } 
+
+    public function justificationsAbsenceRetard()
+    {
+        return $this->hasMany(JustificationAbsenceRetard::class, 'parent_id');
+    }
+
+    public function paiementsDeclares()
+    {
+        return $this->hasMany(PaiementDeclare::class, 'parent_id');
+    }
+
+    public function demandesReinscription()
+    {
+        return $this->hasMany(DemandeReinscription::class, 'parent_id');
+    }
+
+
 }

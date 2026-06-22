@@ -18,6 +18,14 @@ use App\Http\Controllers\NoteController;
 use App\Http\Controllers\PaiementController;
 use App\Http\Controllers\ParentController;
 use App\Http\Controllers\ParentEleveController;
+use App\Http\Controllers\ParentPaiementDeclareController;
+use App\Http\Controllers\ParentPaiementController;
+use App\Http\Controllers\ParentJustificationAbsenceRetardController;
+use App\Http\Controllers\ParentDemandeReinscriptionController;
+use App\Http\Controllers\ParentBulletinController;
+use App\Http\Controllers\GestionnairePaiementDeclareController;
+use App\Http\Controllers\GestionnaireJustificationAbsenceRetardController;
+use App\Http\Controllers\GestionnaireDemandeReinscriptionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ResultatController;
 use App\Http\Controllers\SanctionAppliqueeController;
@@ -140,6 +148,48 @@ Route::middleware(['auth', 'role:gestionnaire'])->group(function () {
 
     Route::post('/sanctions-appliquees/{sanction_appliquee}/terminer', [SanctionAppliqueeController::class, 'terminer'])
         ->name('sanctions-appliquees.terminer');
+
+    Route::get('/demandes-parentales/justifications', [GestionnaireJustificationAbsenceRetardController::class, 'index'])
+        ->name('gestionnaire.justifications-parent.index');
+
+    Route::get('/demandes-parentales/justifications/{justification}', [GestionnaireJustificationAbsenceRetardController::class, 'show'])
+        ->name('gestionnaire.justifications-parent.show');
+
+    Route::get('/demandes-parentales/justifications/{justification}/piece', [GestionnaireJustificationAbsenceRetardController::class, 'piece'])
+        ->name('gestionnaire.justifications-parent.piece');
+
+    Route::post('/demandes-parentales/justifications/{justification}/accepter', [GestionnaireJustificationAbsenceRetardController::class, 'accepter'])
+        ->name('gestionnaire.justifications-parent.accepter');
+
+    Route::post('/demandes-parentales/justifications/{justification}/refuser', [GestionnaireJustificationAbsenceRetardController::class, 'refuser'])
+        ->name('gestionnaire.justifications-parent.refuser');
+
+    Route::get('/demandes-parentales/paiements-declares', [GestionnairePaiementDeclareController::class, 'index'])
+        ->name('gestionnaire.paiements-declares.index');
+
+    Route::get('/demandes-parentales/paiements-declares/{paiementDeclare}', [GestionnairePaiementDeclareController::class, 'show'])
+        ->name('gestionnaire.paiements-declares.show');
+
+    Route::get('/demandes-parentales/paiements-declares/{paiementDeclare}/preuve', [GestionnairePaiementDeclareController::class, 'preuve'])
+        ->name('gestionnaire.paiements-declares.preuve');
+
+    Route::post('/demandes-parentales/paiements-declares/{paiementDeclare}/valider', [GestionnairePaiementDeclareController::class, 'valider'])
+        ->name('gestionnaire.paiements-declares.valider');
+
+    Route::post('/demandes-parentales/paiements-declares/{paiementDeclare}/refuser', [GestionnairePaiementDeclareController::class, 'refuser'])
+        ->name('gestionnaire.paiements-declares.refuser');
+
+    Route::get('/demandes-parentales/reinscriptions', [GestionnaireDemandeReinscriptionController::class, 'index'])
+        ->name('gestionnaire.demandes-reinscription.index');
+
+    Route::get('/demandes-parentales/reinscriptions/{demande}', [GestionnaireDemandeReinscriptionController::class, 'show'])
+        ->name('gestionnaire.demandes-reinscription.show');
+
+    Route::post('/demandes-parentales/reinscriptions/{demande}/valider', [GestionnaireDemandeReinscriptionController::class, 'valider'])
+        ->name('gestionnaire.demandes-reinscription.valider');
+
+    Route::post('/demandes-parentales/reinscriptions/{demande}/refuser', [GestionnaireDemandeReinscriptionController::class, 'refuser'])
+        ->name('gestionnaire.demandes-reinscription.refuser');
 });
 
 Route::middleware(['auth', 'role:gestionnaire,enseignant'])->group(function () {
@@ -203,6 +253,36 @@ Route::middleware(['auth', 'role:parent'])
     ->group(function () {
         Route::get('/eleves/{eleve}', [ParentEleveController::class, 'show'])
             ->name('eleves.show');
+
+        Route::get('/paiements-declares', [ParentPaiementDeclareController::class, 'index'])
+            ->name('paiements-declares.index');
+
+        Route::get('/paiements/{paiement}/recu', [ParentPaiementController::class, 'recu'])
+            ->name('paiements.recu');
+
+        Route::get('/paiements-declares/{paiementDeclare}/preuve', [ParentPaiementDeclareController::class, 'preuve'])
+            ->name('paiements-declares.preuve');
+
+        Route::post('/inscriptions/{inscription}/paiements-declares', [ParentPaiementDeclareController::class, 'store'])
+            ->name('paiements-declares.store');
+
+        Route::get('/absences-retards/{absence_retard}/justifier', [ParentJustificationAbsenceRetardController::class, 'create'])
+            ->name('justifications.create');
+
+        Route::post('/absences-retards/{absence_retard}/justifications', [ParentJustificationAbsenceRetardController::class, 'store'])
+            ->name('justifications.store');
+
+        Route::get('/justifications/{justification}/piece', [ParentJustificationAbsenceRetardController::class, 'piece'])
+            ->name('justifications.piece');
+
+        Route::post('/eleves/{eleve}/demandes-reinscription', [ParentDemandeReinscriptionController::class, 'store'])
+            ->name('demandes-reinscription.store');
+
+        Route::get('/inscriptions/{inscription}/trimestres/{trimestre}/bulletin', [ParentBulletinController::class, 'trimestriel'])
+            ->name('bulletins.trimestriel');
+
+        Route::get('/inscriptions/{inscription}/bulletin-annuel', [ParentBulletinController::class, 'annuel'])
+            ->name('bulletins.annuel');
     });
 
 require __DIR__.'/auth.php';

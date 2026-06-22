@@ -79,6 +79,12 @@ class AbsenceRetard extends Model
         return $this->belongsTo(User::class, 'statut_mis_a_jour_par')->withTrashed();
     }
 
+
+    public function justificationParentale()
+    {
+        return $this->hasOne(JustificationAbsenceRetard::class, 'absence_retard_id');
+    }
+
     public function libelleType(): string
     {
         return $this->type === 'retard' ? 'Retard' : 'Absence';

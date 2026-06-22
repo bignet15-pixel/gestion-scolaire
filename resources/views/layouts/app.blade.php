@@ -129,6 +129,20 @@
                         <a href="{{ route('sanctions-appliquees.index') }}" class="sidebar-link{{ $active('sanctions-appliquees.*') }}">
                             Sanctions appliquées
                         </a>
+
+                        <div class="sidebar-section">Demandes parentales</div>
+
+                        <a href="{{ route('gestionnaire.justifications-parent.index') }}" class="sidebar-link{{ $active('gestionnaire.justifications-parent.*') }}">
+                            Justifications parents
+                        </a>
+
+                        <a href="{{ route('gestionnaire.paiements-declares.index') }}" class="sidebar-link{{ $active('gestionnaire.paiements-declares.*') }}">
+                            Paiements déclarés
+                        </a>
+
+                        <a href="{{ route('gestionnaire.demandes-reinscription.index') }}" class="sidebar-link{{ $active('gestionnaire.demandes-reinscription.*') }}">
+                            Réinscriptions
+                        </a>
                     @endif
 
                     {{-- Condition : auth()->user()->estEnseignant(). --}}
@@ -161,8 +175,7 @@
 
                         <a href="{{ route('sanctions-appliquees.index') }}" class="sidebar-link{{ $active('sanctions-appliquees.*') }}">
                             Sanctions appliquées
-                        </a>
-                    @endif
+                        </a>                    @endif
 
                     {{-- Condition : auth()->user()->estParent(). --}}
                     @if (auth()->user()->estParent())
@@ -170,6 +183,10 @@
 
                         <a href="{{ route('dashboard') }}" class="sidebar-link{{ $active('dashboard') }}">
                             Mes enfants
+                        </a>
+
+                        <a href="{{ route('parent.paiements-declares.index') }}" class="sidebar-link{{ $active('parent.paiements-declares.*') }}">
+                            Paiements déclarés
                         </a>
                     @endif
                 @endauth

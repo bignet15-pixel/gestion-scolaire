@@ -9,6 +9,8 @@ use App\Models\EmploiDuTemps;
 use App\Models\Evaluation;
 use App\Models\Inscription;
 use App\Models\Paiement;
+use App\Models\PaiementDeclare;
+use App\Models\DemandeReinscription;
 use App\Models\SanctionAppliquee;
 use App\Models\User;
 use App\Models\AnneeScolaire;
@@ -42,27 +44,36 @@ class DashboardController extends Controller
 
     /**
      * Dashboard personnel du parent connecté.
+     *
+     * Par défaut, les indicateurs financiers utilisent uniquement l'année
+     * scolaire courante. L'historique complet reste consultable dans la fiche
+     * de chaque enfant.
      */
     private function dashboardParent(User $user)
     {
+        $anneeActive = $this->anneeScolaireCourante();
+
         $enfants = $user->enfants()
             ->with([
-                'inscriptions.classe.anneeScolaire',
-                'inscriptions.paiements',
+                'inscriptions' => function ($query) use ($anneeActive) {
+                    $query->with(['classe.anneeScolaire', 'anneeScolaire', 'paiements'])
+                        ->when($anneeActive, fn ($q) => $q->where('annee_scolaire_id', $anneeActive->id))
+                        ->orderByDesc('date_inscription');
+                },
             ])
             ->orderBy('nom')
             ->orderBy('prenom')
             ->get();
 
-        $inscriptions = $enfants
+        $inscriptionsActives = $enfants
             ->flatMap(fn ($eleve) => $eleve->inscriptions)
             ->values();
 
-        $inscriptionIds = $inscriptions->pluck('id');
+        $inscriptionIds = $inscriptionsActives->pluck('id');
 
-        $totalFraisAttendus = (float) $inscriptions->sum('frais_attendu');
+        $totalFraisAttendus = (float) $inscriptionsActives->sum('frais_attendu');
 
-        $totalFraisCollectes = (float) $inscriptions->sum(function ($inscription) {
+        $totalFraisCollectes = (float) $inscriptionsActives->sum(function ($inscription) {
             return $inscription->paiements->sum('montant');
         });
 
@@ -71,6 +82,7 @@ class DashboardController extends Controller
         $absencesRetards = AbsenceRetard::with([
                 'inscription.eleve',
                 'inscription.classe',
+                'justificationParentale',
             ])
             ->whereIn('inscription_id', $inscriptionIds)
             ->where('visible_parent', true)
@@ -90,14 +102,36 @@ class DashboardController extends Controller
             ->limit(8)
             ->get();
 
+        $paiementsDeclares = PaiementDeclare::with([
+                'inscription.eleve',
+                'inscription.classe',
+            ])
+            ->whereIn('inscription_id', $inscriptionIds)
+            ->orderByDesc('created_at')
+            ->limit(6)
+            ->get();
+
+        $demandesReinscription = DemandeReinscription::with([
+                'eleve',
+                'classeDemandee',
+                'nouvelleAnneeScolaire',
+            ])
+            ->whereIn('eleve_id', $enfants->pluck('id'))
+            ->orderByDesc('created_at')
+            ->limit(6)
+            ->get();
+
         return view('dashboard.parent', compact(
+            'anneeActive',
             'enfants',
-            'inscriptions',
+            'inscriptionsActives',
             'totalFraisAttendus',
             'totalFraisCollectes',
             'totalRestant',
             'absencesRetards',
-            'sanctions'
+            'sanctions',
+            'paiementsDeclares',
+            'demandesReinscription'
         ));
     }
 
