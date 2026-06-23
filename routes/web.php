@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\AbsenceRetardController;
 use App\Http\Controllers\AnneeScolaireController;
+use App\Http\Controllers\AnnonceEcoleController;
+use App\Http\Controllers\GestionnaireAnnonceController;
+use App\Http\Controllers\NotificationUtilisateurController;
 use App\Http\Controllers\BulletinController;
 use App\Http\Controllers\ClasseController;
 use App\Http\Controllers\ClasseMatiereUserController;
@@ -45,6 +48,24 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    Route::get('/notifications', [NotificationUtilisateurController::class, 'index'])
+        ->name('notifications.index');
+
+    Route::get('/notifications/{notification}', [NotificationUtilisateurController::class, 'show'])
+        ->name('notifications.show');
+
+    Route::post('/notifications/{notification}/lue', [NotificationUtilisateurController::class, 'marquerCommeLue'])
+        ->name('notifications.marquer-lue');
+
+    Route::post('/notifications/tout-marquer-lu', [NotificationUtilisateurController::class, 'toutMarquerCommeLu'])
+        ->name('notifications.tout-marquer-lu');
+
+    Route::get('/annonces-ecole', [AnnonceEcoleController::class, 'index'])
+        ->name('annonces-ecole.index');
+
+    Route::get('/annonces-ecole/{annonce}', [AnnonceEcoleController::class, 'show'])
+        ->name('annonces-ecole.show');
 });
 
 Route::middleware(['auth', 'role:gestionnaire'])->group(function () {
@@ -81,6 +102,12 @@ Route::middleware(['auth', 'role:gestionnaire'])->group(function () {
     Route::resource('parents', ParentController::class)
         ->except(['show'])
         ->parameters(['parents' => 'parent']);
+
+    Route::resource('annonces', GestionnaireAnnonceController::class)
+        ->parameters(['annonces' => 'annonce']);
+
+    Route::post('/annonces/{annonce}/publier', [GestionnaireAnnonceController::class, 'publier'])
+        ->name('annonces.publier');
 
     Route::resource('affectations', ClasseMatiereUserController::class)
         ->except(['show'])

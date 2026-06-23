@@ -122,5 +122,15 @@ class User extends Authenticatable
         return $this->hasMany(DemandeReinscription::class, 'parent_id');
     }
 
+    public function notificationsUtilisateur()
+    {
+        return $this->hasMany(NotificationUtilisateur::class);
+    }
+
+    public function annoncesPubliees()
+    {
+        return $this->hasMany(Annonce::class, 'publie_par');
+    }
+
 
 }

@@ -18,6 +18,10 @@
 
             return request()->routeIs(...$routes) ? ' active' : '';
         };
+
+        $notificationsNonLues = auth()->check()
+            ? auth()->user()->notificationsUtilisateur()->nonLues()->count()
+            : 0;
     @endphp
     <div class="app-shell">
         <aside class="sidebar">
@@ -74,6 +78,23 @@
 
                         <a href="{{ route('affectations.index') }}" class="sidebar-link{{ $active('affectations.*') }}">
                             Affectations
+                        </a>
+
+                        <div class="sidebar-section">Communication</div>
+
+                        <a href="{{ route('annonces.index') }}" class="sidebar-link{{ $active('annonces.*') }}">
+                            Annonces
+                        </a>
+
+                        <a href="{{ route('annonces-ecole.index') }}" class="sidebar-link{{ $active('annonces-ecole.*') }}">
+                            Annonces reçues
+                        </a>
+
+                        <a href="{{ route('notifications.index') }}" class="sidebar-link{{ $active('notifications.*') }}">
+                            Notifications
+                            @if ($notificationsNonLues > 0)
+                                <span class="sidebar-badge">{{ $notificationsNonLues }}</span>
+                            @endif
                         </a>
 
                         <div class="sidebar-section">Élèves & finances</div>
@@ -169,6 +190,17 @@
                             Moyennes / Classements
                         </a>
 
+                        <a href="{{ route('annonces-ecole.index') }}" class="sidebar-link{{ $active('annonces-ecole.*') }}">
+                            Annonces
+                        </a>
+
+                        <a href="{{ route('notifications.index') }}" class="sidebar-link{{ $active('notifications.*') }}">
+                            Notifications
+                            @if ($notificationsNonLues > 0)
+                                <span class="sidebar-badge">{{ $notificationsNonLues }}</span>
+                            @endif
+                        </a>
+
                         <a href="{{ route('absences-retards.index') }}" class="sidebar-link{{ $active('absences-retards.*') }}">
                             Absences et retards
                         </a>
@@ -187,6 +219,17 @@
 
                         <a href="{{ route('parent.paiements-declares.index') }}" class="sidebar-link{{ $active('parent.paiements-declares.*') }}">
                             Paiements déclarés
+                        </a>
+
+                        <a href="{{ route('annonces-ecole.index') }}" class="sidebar-link{{ $active('annonces-ecole.*') }}">
+                            Annonces
+                        </a>
+
+                        <a href="{{ route('notifications.index') }}" class="sidebar-link{{ $active('notifications.*') }}">
+                            Notifications
+                            @if ($notificationsNonLues > 0)
+                                <span class="sidebar-badge">{{ $notificationsNonLues }}</span>
+                            @endif
                         </a>
 
                         <a href="{{ route('profile.edit') }}" class="sidebar-link{{ $active('profile.edit') }}">

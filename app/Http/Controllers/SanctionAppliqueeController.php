@@ -9,6 +9,7 @@ use App\Models\Inscription;
 use App\Models\Sanction;
 use App\Models\SanctionAppliquee;
 use App\Models\Trimestre;
+use App\Services\NotificationScolaireService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -126,7 +127,7 @@ class SanctionAppliqueeController extends Controller
         ));
     }
 
-    public function store(Request $request)
+    public function store(Request $request, NotificationScolaireService $notificationScolaireService)
     {
         $this->verifierGestionnaire();
         $validated = $request->validate([
@@ -221,6 +222,12 @@ class SanctionAppliqueeController extends Controller
             'decision_le' => now(),
         ]);
 
+        $notificationScolaireService->notifierSanctionAppliquee($sanctionAppliquee->fresh([
+            'inscription.eleve.parents',
+            'sanction',
+            'trimestre',
+        ]));
+
         return redirect()
             ->route('sanctions-appliquees.show', $sanctionAppliquee)
             ->with('success', 'Sanction manuelle appliquée avec succès.');
@@ -243,7 +250,7 @@ class SanctionAppliqueeController extends Controller
         ]);
     }
 
-    public function appliquer(SanctionAppliquee $sanction_appliquee)
+    public function appliquer(SanctionAppliquee $sanction_appliquee, NotificationScolaireService $notificationScolaireService)
     {
         $this->verifierGestionnaire();
         $this->verifierSanctionModifiable($sanction_appliquee);
@@ -268,6 +275,12 @@ class SanctionAppliqueeController extends Controller
             'decision_par' => Auth::id(),
             'decision_le' => now(),
         ]);
+
+        $notificationScolaireService->notifierSanctionAppliquee($sanction_appliquee->fresh([
+            'inscription.eleve.parents',
+            'sanction',
+            'trimestre',
+        ]));
 
         return back()->with('success', 'Sanction appliquée.');
     }

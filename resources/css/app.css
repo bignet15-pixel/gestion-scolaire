@@ -1068,6 +1068,7 @@ small {
     position: absolute;
     inset: 0;
     background: rgba(15, 23, 42, 0.55);
+    -webkit-backdrop-filter: blur(2px);
     backdrop-filter: blur(2px);
 }
 
@@ -2228,7 +2229,7 @@ small {
     width: fit-content;
     list-style: none;
     cursor: pointer;
-    user-select: none;
+    -webkit-animation: none;
     background: var(--primary);
     color: #ffffff;
     border-radius: 10px;
@@ -2651,3 +2652,89 @@ input[type="file"]::file-selector-button:hover {
     font-family: inherit;
 }
 
+
+/* Module annonces + notifications */
+.sidebar-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 7px;
+    margin-left: 8px;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.announcement-content {
+    color: var(--text);
+    line-height: 1.75;
+    white-space: normal;
+}
+
+.announcement-list,
+.notification-list {
+    display: grid;
+    gap: 14px;
+}
+
+.announcement-card h2,
+.notification-item h2 {
+    margin: 6px 0;
+    color: var(--primary-dark);
+    font-size: 20px;
+}
+
+.notification-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: center;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.notification-item-unread {
+    border-left: 6px solid var(--primary);
+    background: #f8fbff;
+}
+
+.notification-meta {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.notification-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-top: 18px;
+}
+
+@media (max-width: 850px) {
+    .notification-item {
+        grid-template-columns: 1fr;
+    }
+
+    .notification-actions {
+        justify-content: flex-start;
+    }
+}

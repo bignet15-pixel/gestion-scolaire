@@ -8,6 +8,7 @@ use App\Models\Classe;
 use App\Models\ClasseMatiereUser;
 use App\Models\Inscription;
 use App\Services\Assiduite\SanctionDetectionService;
+use App\Services\NotificationScolaireService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -136,7 +137,7 @@ class AbsenceRetardController extends Controller
         ));
     }
 
-    public function store(Request $request, SanctionDetectionService $detectionService)
+    public function store(Request $request, SanctionDetectionService $detectionService, NotificationScolaireService $notificationScolaireService)
     {
         $validated = $this->validerEvenement($request);
         $inscription = Inscription::with(['classe.anneeScolaire', 'eleve'])
@@ -169,6 +170,10 @@ class AbsenceRetardController extends Controller
 
         $evenement = AbsenceRetard::create($validated);
         $detectionService->detecter($evenement);
+        $notificationScolaireService->notifierAbsenceRetard($evenement->fresh([
+            'inscription.eleve.parents',
+            'inscription.classe',
+        ]));
 
         return redirect()
             ->route('absences-retards.index', [
@@ -294,7 +299,8 @@ class AbsenceRetardController extends Controller
     public function update(
         Request $request,
         AbsenceRetard $absence_retard,
-        SanctionDetectionService $detectionService
+        SanctionDetectionService $detectionService,
+        NotificationScolaireService $notificationScolaireService
     ) {
         $this->verifierGestionnaire();
         $absence_retard->load('inscription.classe.anneeScolaire');
@@ -325,7 +331,12 @@ class AbsenceRetardController extends Controller
         }
 
         $absence_retard->update($validated);
-        $detectionService->detecter($absence_retard->fresh());
+        $absence_retard = $absence_retard->fresh([
+            'inscription.eleve.parents',
+            'inscription.classe',
+        ]);
+        $detectionService->detecter($absence_retard);
+        $notificationScolaireService->notifierAbsenceRetard($absence_retard);
 
         return redirect()
             ->route('absences-retards.show', $absence_retard)

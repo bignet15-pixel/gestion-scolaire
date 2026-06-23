@@ -6,6 +6,7 @@ use App\Models\ClasseMatiereUser;
 use App\Models\Evaluation;
 use App\Models\Inscription;
 use App\Models\Note;
+use App\Services\NotificationScolaireService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -69,7 +70,7 @@ class NoteController extends Controller
     /**
      * Enregistre ou modifie les notes d'une évaluation.
      */
-    public function enregistrer(Request $request, Evaluation $evaluation)
+    public function enregistrer(Request $request, Evaluation $evaluation, NotificationScolaireService $notificationScolaireService)
     {
         $this->verifierAccesEvaluation($evaluation);
 
@@ -141,13 +142,19 @@ class NoteController extends Controller
                     'is_deleted' => false,
                 ]);
             } else {
-                Note::create([
+                $note = Note::create([
                     'inscription_id' => $inscription->id,
                     'evaluation_id' => $evaluation->id,
                     'valeur' => $valeur,
                     'appreciation' => $appreciation,
                 ]);
             }
+
+            $notificationScolaireService->notifierNote($note->fresh([
+                'inscription.eleve.parents',
+                'evaluation.matiere',
+                'evaluation.trimestre',
+            ]));
         }
 
         return redirect()

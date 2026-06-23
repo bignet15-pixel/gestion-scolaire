@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AnneeScolaire;
 use App\Models\Trimestre;
+use App\Services\NotificationScolaireService;
 use Illuminate\Http\Request;
 
 class TrimestreController extends Controller
@@ -145,7 +146,7 @@ class TrimestreController extends Controller
     /**
      * Ferme un trimestre.
      */
-    public function fermer(Trimestre $trimestre)
+    public function fermer(Trimestre $trimestre, NotificationScolaireService $notificationScolaireService)
     {
         if ($trimestre->anneeScolaire?->estFermee()) {
             return back()->withErrors([
@@ -164,9 +165,11 @@ class TrimestreController extends Controller
             'date_fin' => now()->toDateString(),
         ]);
 
+        $nombreNotifications = $notificationScolaireService->notifierResultatsTrimestreDisponibles($trimestre->fresh('anneeScolaire'));
+
         return redirect()
             ->route('trimestres.index')
-            ->with('success', 'Trimestre fermé avec succès.');
+            ->with('success', 'Trimestre fermé avec succès. Notifications résultats envoyées : ' . $nombreNotifications . '.');
     }
 
     /**

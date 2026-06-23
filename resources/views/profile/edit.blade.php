@@ -121,10 +121,6 @@
             </div>
         </div>
 
-        @if (! auth()->user()->estParent())
-            <div class="card profile-account-card profile-account-danger">
-                @include('profile.partials.delete-user-form')
-            </div>
-        @endif
+        
     </div>
 </x-app-layout>

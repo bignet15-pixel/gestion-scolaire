@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AnneeScolaire;
 use App\Models\DemandeReinscription;
 use App\Models\Inscription;
+use App\Services\NotificationScolaireService;
 use App\Services\ParentReinscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -75,7 +76,7 @@ class GestionnaireDemandeReinscriptionController extends Controller
         return view('gestionnaire.demandes_reinscription.show', compact('demande'));
     }
 
-    public function valider(Request $request, DemandeReinscription $demande)
+    public function valider(Request $request, DemandeReinscription $demande, NotificationScolaireService $notificationScolaireService)
     {
         $validated = $request->validate([
             'commentaire_gestionnaire' => ['nullable', 'string', 'max:3000'],
@@ -131,10 +132,17 @@ class GestionnaireDemandeReinscriptionController extends Controller
             ]);
         });
 
+        $notificationScolaireService->notifierDemandeReinscriptionTraitee($demande->fresh([
+            'eleve.parents',
+            'parent',
+            'classeDemandee',
+            'nouvelleAnneeScolaire',
+        ]));
+
         return back()->with('success', 'Demande de réinscription validée et inscription officielle créée.');
     }
 
-    public function refuser(Request $request, DemandeReinscription $demande)
+    public function refuser(Request $request, DemandeReinscription $demande, NotificationScolaireService $notificationScolaireService)
     {
         $validated = $request->validate([
             'commentaire_gestionnaire' => ['required', 'string', 'max:3000'],
@@ -148,6 +156,13 @@ class GestionnaireDemandeReinscriptionController extends Controller
             'valide_le' => now(),
             'commentaire_gestionnaire' => $validated['commentaire_gestionnaire'],
         ]);
+
+        $notificationScolaireService->notifierDemandeReinscriptionTraitee($demande->fresh([
+            'eleve.parents',
+            'parent',
+            'classeDemandee',
+            'nouvelleAnneeScolaire',
+        ]));
 
         return back()->with('success', 'Demande de réinscription refusée.');
     }

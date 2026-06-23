@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AnneeScolaire;
 use App\Models\Paiement;
 use App\Models\PaiementDeclare;
+use App\Services\NotificationScolaireService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -68,7 +69,7 @@ class GestionnairePaiementDeclareController extends Controller
         return view('gestionnaire.paiements_declares.show', compact('paiementDeclare'));
     }
 
-    public function valider(Request $request, PaiementDeclare $paiementDeclare)
+    public function valider(Request $request, PaiementDeclare $paiementDeclare, NotificationScolaireService $notificationScolaireService)
     {
         $validated = $request->validate([
             'commentaire_validation' => ['nullable', 'string', 'max:3000'],
@@ -107,10 +108,16 @@ class GestionnairePaiementDeclareController extends Controller
             ]);
         });
 
+        $notificationScolaireService->notifierPaiementDeclareTraite($paiementDeclare->fresh([
+            'inscription.eleve.parents',
+            'parent',
+            'paiement',
+        ]));
+
         return back()->with('success', 'Paiement déclaré validé et paiement officiel créé.');
     }
 
-    public function refuser(Request $request, PaiementDeclare $paiementDeclare)
+    public function refuser(Request $request, PaiementDeclare $paiementDeclare, NotificationScolaireService $notificationScolaireService)
     {
         $validated = $request->validate([
             'commentaire_validation' => ['required', 'string', 'max:3000'],
@@ -124,6 +131,12 @@ class GestionnairePaiementDeclareController extends Controller
             'valide_le' => now(),
             'commentaire_validation' => $validated['commentaire_validation'],
         ]);
+
+        $notificationScolaireService->notifierPaiementDeclareTraite($paiementDeclare->fresh([
+            'inscription.eleve.parents',
+            'parent',
+            'paiement',
+        ]));
 
         return back()->with('success', 'Paiement déclaré refusé.');
     }

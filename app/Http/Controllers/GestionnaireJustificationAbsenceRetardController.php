@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\JustificationAbsenceRetard;
 use App\Services\Assiduite\SanctionDetectionService;
+use App\Services\NotificationScolaireService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -55,7 +56,7 @@ class GestionnaireJustificationAbsenceRetardController extends Controller
         return view('gestionnaire.justifications.show', compact('justification'));
     }
 
-    public function accepter(Request $request, JustificationAbsenceRetard $justification, SanctionDetectionService $detectionService)
+    public function accepter(Request $request, JustificationAbsenceRetard $justification, SanctionDetectionService $detectionService, NotificationScolaireService $notificationScolaireService)
     {
         $validated = $request->validate([
             'commentaire_traitement' => ['nullable', 'string', 'max:3000'],
@@ -81,11 +82,15 @@ class GestionnaireJustificationAbsenceRetardController extends Controller
         ]);
 
         $detectionService->detecter($justification->absenceRetard->fresh());
+        $notificationScolaireService->notifierJustificationTraitee($justification->fresh([
+            'absenceRetard.inscription.eleve.parents',
+            'parent',
+        ]));
 
         return back()->with('success', 'Justification acceptée. L’absence ou le retard est maintenant justifié.');
     }
 
-    public function refuser(Request $request, JustificationAbsenceRetard $justification, SanctionDetectionService $detectionService)
+    public function refuser(Request $request, JustificationAbsenceRetard $justification, SanctionDetectionService $detectionService, NotificationScolaireService $notificationScolaireService)
     {
         $validated = $request->validate([
             'commentaire_traitement' => ['required', 'string', 'max:3000'],
@@ -109,6 +114,10 @@ class GestionnaireJustificationAbsenceRetardController extends Controller
         ]);
 
         $detectionService->detecter($justification->absenceRetard->fresh());
+        $notificationScolaireService->notifierJustificationTraitee($justification->fresh([
+            'absenceRetard.inscription.eleve.parents',
+            'parent',
+        ]));
 
         return back()->with('success', 'Justification refusée.');
     }
