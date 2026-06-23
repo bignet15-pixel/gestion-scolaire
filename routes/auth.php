@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\Auth\OtpPasswordResetController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
@@ -25,12 +26,20 @@ Route::middleware('guest')->group(function () {
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
-    Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
+    Route::get('forgot-password', [OtpPasswordResetController::class, 'create'])
         ->name('password.request');
 
-    Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+    Route::post('forgot-password', [OtpPasswordResetController::class, 'sendCode'])
         ->name('password.email');
 
+    Route::post('forgot-password/verify-code', [OtpPasswordResetController::class, 'verifyCode'])
+        ->name('password.otp.verify');
+
+    Route::post('forgot-password/reset', [OtpPasswordResetController::class, 'resetPassword'])
+        ->name('password.otp.reset');
+
+    // Les anciennes routes de réinitialisation par lien sont conservées comme secours,
+    // mais le parcours affiché aux utilisateurs utilise désormais le code OTP par email.
     Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])
         ->name('password.reset');
 

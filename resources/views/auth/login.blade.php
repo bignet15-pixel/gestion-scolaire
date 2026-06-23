@@ -64,7 +64,13 @@
                         <x-input-error :messages="$errors->get('password')" class="auth-error" />
                     </div>
 
-                    
+                    <div class="auth-row">
+                        <span></span>
+
+                        <a href="{{ route('password.request') }}" class="auth-link">
+                            Mot de passe oublié ?
+                        </a>
+                    </div>
 
                     <button type="submit" class="btn btn-primary auth-main-btn">
                         Se connecter
