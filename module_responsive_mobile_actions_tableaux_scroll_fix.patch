@@ -1,0 +1,312 @@
+--- a/resources/views/layouts/app.blade.php	2026-06-23 16:50:17.575991092 +0000
++++ b/resources/views/layouts/app.blade.php	2026-06-23 17:26:45.257349016 +0000
+@@ -282,16 +282,18 @@
+                             <span>{{ auth()->user()->role }}</span>
+                         </div>
+ 
+-                        <a href="{{ route('profile.edit') }}" class="btn">
+-                            Mon compte
++                        <a href="{{ route('profile.edit') }}" class="btn topbar-icon-btn" aria-label="Mon compte" title="Mon compte">
++                            <span class="topbar-action-icon" aria-hidden="true">👤</span>
++                            <span class="topbar-action-text">Mon compte</span>
+                         </a>
+ 
+                         <form method="POST" action="{{ route('logout') }}">
+                             {{-- Jeton de securite du formulaire. --}}
+                             @csrf
+ 
+-                            <button type="submit" class="btn btn-danger">
+-                                Déconnexion
++                            <button type="submit" class="btn btn-danger topbar-icon-btn" aria-label="Déconnexion" title="Déconnexion">
++                                <span class="topbar-action-icon" aria-hidden="true">⏻</span>
++                                <span class="topbar-action-text">Déconnexion</span>
+                             </button>
+                         </form>
+                     </div>
+@@ -411,27 +413,16 @@
+                 wrapper.setAttribute('tabindex', '0');
+                 wrapper.setAttribute('aria-label', 'Tableau adapté aux petits écrans');
+ 
+-                const headers = Array.from(table.querySelectorAll('thead th')).map(function (th) {
+-                    return th.textContent.trim();
+-                });
+-
+-                const isComplexTable = table.classList.contains('note-table')
+-                    || table.classList.contains('planning-grid-table')
+-                    || table.classList.contains('planning-detail-table')
+-                    || table.querySelector('input, textarea, select') !== null;
+-
+-                if (!isComplexTable && headers.length > 0) {
+-                    table.classList.add('responsive-card-table');
+-
+-                    table.querySelectorAll('tbody tr').forEach(function (row) {
+-                        Array.from(row.children).forEach(function (cell, index) {
+-                            if (cell.tagName.toLowerCase() === 'td' && headers[index]) {
+-                                cell.setAttribute('data-label', headers[index]);
+-                            }
+-                        });
+-                    });
+-                } else {
+-                    table.classList.add('responsive-scroll-table');
++                table.classList.remove('responsive-card-table');
++                table.classList.add('responsive-scroll-table');
++
++                const scrollHint = wrapper.querySelector('.table-scroll-hint');
++
++                if (!scrollHint) {
++                    const hint = document.createElement('div');
++                    hint.className = 'table-scroll-hint';
++                    hint.textContent = 'Faire glisser horizontalement pour voir la suite →';
++                    wrapper.appendChild(hint);
+                 }
+             });
+         }
+--- a/resources/css/app.css	2026-06-23 16:50:17.604025278 +0000
++++ b/resources/css/app.css	2026-06-23 17:27:07.873941592 +0000
+@@ -3431,3 +3431,246 @@
+         grid-template-columns: 1fr !important;
+     }
+ }
++
++/* ==========================================================
++   Correctif mobile final — actions compactes + tableaux en scroll
++   ========================================================== */
++
++.topbar-icon-btn {
++    display: inline-flex;
++    align-items: center;
++    justify-content: center;
++    gap: 8px;
++}
++
++.topbar-action-icon {
++    display: none;
++    line-height: 1;
++}
++
++.table-scroll-hint {
++    display: none;
++}
++
++@media (max-width: 780px) {
++    .topbar {
++        display: grid !important;
++        grid-template-columns: minmax(0, 1fr) auto !important;
++        align-items: center !important;
++        gap: 10px !important;
++        padding: 10px 12px !important;
++    }
++
++    .topbar-title-block {
++        grid-column: 1 / 2 !important;
++        width: auto !important;
++        min-width: 0 !important;
++        align-items: center !important;
++    }
++
++    .page-title {
++        font-size: 18px !important;
++        line-height: 1.15 !important;
++    }
++
++    .page-kicker {
++        font-size: 10px !important;
++        line-height: 1.1 !important;
++    }
++
++    .user-box {
++        grid-column: 2 / 3 !important;
++        justify-self: end !important;
++        align-self: start !important;
++        width: auto !important;
++        display: flex !important;
++        grid-template-columns: none !important;
++        flex-wrap: nowrap !important;
++        align-items: center !important;
++        gap: 6px !important;
++    }
++
++    .user-info {
++        display: none !important;
++    }
++
++    .user-box form {
++        width: auto !important;
++        margin: 0 !important;
++        display: inline-flex !important;
++    }
++
++    .user-box .btn,
++    .user-box form .btn,
++    .topbar-icon-btn {
++        width: 42px !important;
++        min-width: 42px !important;
++        max-width: 42px !important;
++        height: 42px !important;
++        min-height: 42px !important;
++        padding: 0 !important;
++        border-radius: 13px !important;
++        display: inline-flex !important;
++        align-items: center !important;
++        justify-content: center !important;
++        font-size: 0 !important;
++        overflow: hidden !important;
++    }
++
++    .topbar-action-icon {
++        display: inline-block !important;
++        font-size: 18px !important;
++    }
++
++    .topbar-action-text {
++        position: absolute !important;
++        width: 1px !important;
++        height: 1px !important;
++        padding: 0 !important;
++        margin: -1px !important;
++        overflow: hidden !important;
++        clip: rect(0, 0, 0, 0) !important;
++        white-space: nowrap !important;
++        border: 0 !important;
++    }
++}
++
++@media (max-width: 640px) {
++    .content {
++        overflow-x: hidden !important;
++    }
++
++    .table-responsive,
++    .responsive-table-shell {
++        display: block !important;
++        width: 100% !important;
++        max-width: 100% !important;
++        overflow-x: auto !important;
++        overflow-y: hidden !important;
++        -webkit-overflow-scrolling: touch !important;
++        touch-action: pan-x !important;
++        border: 1px solid var(--border) !important;
++        border-radius: 14px !important;
++        background: var(--white) !important;
++        margin: 10px 0 4px !important;
++    }
++
++    .table-responsive > .table,
++    .responsive-table-shell > .table,
++    .table-responsive > .responsive-card-table,
++    .responsive-table-shell > .responsive-card-table,
++    .responsive-card-table,
++    .responsive-scroll-table {
++        display: table !important;
++        width: max-content !important;
++        min-width: 860px !important;
++        max-width: none !important;
++        table-layout: auto !important;
++        border-collapse: collapse !important;
++        border-spacing: 0 !important;
++        background: var(--white) !important;
++        white-space: nowrap !important;
++    }
++
++    .responsive-card-table thead,
++    .responsive-scroll-table thead {
++        display: table-header-group !important;
++    }
++
++    .responsive-card-table tbody,
++    .responsive-scroll-table tbody {
++        display: table-row-group !important;
++    }
++
++    .responsive-card-table tr,
++    .responsive-scroll-table tr {
++        display: table-row !important;
++        width: auto !important;
++        margin: 0 !important;
++        border: 0 !important;
++        border-radius: 0 !important;
++        box-shadow: none !important;
++        overflow: visible !important;
++    }
++
++    .responsive-card-table th,
++    .responsive-card-table td,
++    .responsive-scroll-table th,
++    .responsive-scroll-table td {
++        display: table-cell !important;
++        width: auto !important;
++        padding: 11px 12px !important;
++        border-bottom: 1px solid var(--border) !important;
++        white-space: nowrap !important;
++        overflow-wrap: normal !important;
++        vertical-align: middle !important;
++    }
++
++    .responsive-card-table td::before,
++    .responsive-scroll-table td::before {
++        content: none !important;
++        display: none !important;
++    }
++
++    .responsive-card-table td:last-child,
++    .responsive-card-table .table-actions,
++    .responsive-scroll-table td:last-child,
++    .responsive-scroll-table .table-actions {
++        display: table-cell !important;
++        white-space: nowrap !important;
++    }
++
++    .responsive-card-table .table-actions,
++    .responsive-scroll-table .table-actions {
++        display: flex !important;
++        flex-wrap: nowrap !important;
++        gap: 8px !important;
++    }
++
++    .responsive-card-table .btn,
++    .responsive-card-table form,
++    .responsive-card-table button,
++    .responsive-scroll-table .btn,
++    .responsive-scroll-table form,
++    .responsive-scroll-table button {
++        width: auto !important;
++        min-width: max-content !important;
++    }
++
++    .table-scroll-hint {
++        display: block !important;
++        position: sticky;
++        left: 0;
++        padding: 8px 12px;
++        border-top: 1px solid #e5e7eb;
++        color: var(--muted);
++        background: #f8fafc;
++        font-size: 12px;
++        font-weight: 800;
++        text-align: left;
++    }
++}
++
++@media (max-width: 430px) {
++    .mobile-menu-toggle {
++        width: 42px !important;
++        min-width: 42px !important;
++        height: 42px !important;
++        padding: 0 !important;
++    }
++
++    .topbar-title-block {
++        gap: 8px !important;
++    }
++
++    .page-title {
++        font-size: 17px !important;
++    }
++
++    .table-responsive > .table,
++    .responsive-table-shell > .table,
++    .responsive-card-table,
++    .responsive-scroll-table {
++        min-width: 820px !important;
++    }
++}

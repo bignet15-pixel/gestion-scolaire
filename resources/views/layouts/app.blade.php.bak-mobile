@@ -282,18 +282,16 @@
                             <span>{{ auth()->user()->role }}</span>
                         </div>
 
-                        <a href="{{ route('profile.edit') }}" class="btn topbar-icon-btn" aria-label="Mon compte" title="Mon compte">
-                            <span class="topbar-action-icon" aria-hidden="true">👤</span>
-                            <span class="topbar-action-text">Mon compte</span>
+                        <a href="{{ route('profile.edit') }}" class="btn">
+                            Mon compte
                         </a>
 
                         <form method="POST" action="{{ route('logout') }}">
                             {{-- Jeton de securite du formulaire. --}}
                             @csrf
 
-                            <button type="submit" class="btn btn-danger topbar-icon-btn" aria-label="Déconnexion" title="Déconnexion">
-                                <span class="topbar-action-icon" aria-hidden="true">⏻</span>
-                                <span class="topbar-action-text">Déconnexion</span>
+                            <button type="submit" class="btn btn-danger">
+                                Déconnexion
                             </button>
                         </form>
                     </div>
@@ -400,8 +398,8 @@
         });
 
         function prepareResponsiveTables() {
-            document.querySelectorAll('main table').forEach(function (table) {
-                let wrapper = table.closest('.responsive-table-shell') || table.closest('.table-responsive');
+            document.querySelectorAll('main .table').forEach(function (table) {
+                let wrapper = table.closest('.responsive-table-shell, .table-responsive');
 
                 if (!wrapper) {
                     wrapper = document.createElement('div');
@@ -410,85 +408,35 @@
                     wrapper.appendChild(table);
                 }
 
-                wrapper.classList.add('responsive-table-shell');
                 wrapper.setAttribute('tabindex', '0');
-                wrapper.setAttribute('aria-label', 'Tableau défilable horizontalement');
+                wrapper.setAttribute('aria-label', 'Tableau adapté aux petits écrans');
 
-                table.classList.remove('responsive-card-table');
-                table.classList.add('responsive-scroll-table');
-
-                table.querySelectorAll('td[data-label]').forEach(function (cell) {
-                    cell.removeAttribute('data-label');
+                const headers = Array.from(table.querySelectorAll('thead th')).map(function (th) {
+                    return th.textContent.trim();
                 });
 
-                wrapper.style.display = 'block';
-                wrapper.style.width = '100%';
-                wrapper.style.maxWidth = '100%';
-                wrapper.style.overflowX = 'auto';
-                wrapper.style.overflowY = 'hidden';
-                wrapper.style.webkitOverflowScrolling = 'touch';
-                wrapper.style.touchAction = 'pan-x';
-                wrapper.style.border = '1px solid #e5e7eb';
-                wrapper.style.borderRadius = '14px';
-                wrapper.style.background = '#ffffff';
+                const isComplexTable = table.classList.contains('note-table')
+                    || table.classList.contains('planning-grid-table')
+                    || table.classList.contains('planning-detail-table')
+                    || table.querySelector('input, textarea, select') !== null;
 
-                table.style.display = 'table';
-                table.style.width = 'max-content';
-                table.style.minWidth = window.innerWidth <= 430 ? '900px' : '980px';
-                table.style.maxWidth = 'none';
-                table.style.tableLayout = 'auto';
-                table.style.whiteSpace = 'nowrap';
+                if (!isComplexTable && headers.length > 0) {
+                    table.classList.add('responsive-card-table');
 
-                table.querySelectorAll('thead, tbody, tr, th, td').forEach(function (el) {
-                    el.style.whiteSpace = 'nowrap';
-                });
-
-                // Nettoyer les anciens messages dupliqués.
-                wrapper.querySelectorAll('.table-scroll-hint').forEach(function (hint) {
-                    hint.remove();
-                });
-
-                const hint = document.createElement('div');
-                hint.className = 'table-scroll-hint';
-                hint.textContent = 'Faire glisser horizontalement pour voir la suite →';
-                wrapper.appendChild(hint);
-
-                // Permettre le glisser horizontal avec la souris en mode mobile navigateur.
-                if (!wrapper.dataset.dragScrollReady) {
-                    let isDown = false;
-                    let startX = 0;
-                    let startScrollLeft = 0;
-
-                    wrapper.addEventListener('pointerdown', function (event) {
-                        isDown = true;
-                        startX = event.clientX;
-                        startScrollLeft = wrapper.scrollLeft;
-                        wrapper.classList.add('is-dragging-table');
-                    });
-
-                    wrapper.addEventListener('pointermove', function (event) {
-                        if (!isDown) {
-                            return;
-                        }
-
-                        const deltaX = event.clientX - startX;
-                        wrapper.scrollLeft = startScrollLeft - deltaX;
-                    });
-
-                    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (eventName) {
-                        wrapper.addEventListener(eventName, function () {
-                            isDown = false;
-                            wrapper.classList.remove('is-dragging-table');
+                    table.querySelectorAll('tbody tr').forEach(function (row) {
+                        Array.from(row.children).forEach(function (cell, index) {
+                            if (cell.tagName.toLowerCase() === 'td' && headers[index]) {
+                                cell.setAttribute('data-label', headers[index]);
+                            }
                         });
                     });
-
-                    wrapper.dataset.dragScrollReady = '1';
+                } else {
+                    table.classList.add('responsive-scroll-table');
                 }
             });
         }
 
         prepareResponsiveTables();
-        window.addEventListener('resize', prepareResponsiveTables);
 
         function openModal(form) {
             pendingForm = form;
