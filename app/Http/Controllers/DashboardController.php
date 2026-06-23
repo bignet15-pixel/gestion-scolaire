@@ -471,8 +471,16 @@ class DashboardController extends Controller
             ? $annees->first(fn ($annee) => (string) $annee->id === (string) $selectedAnneeId)
             : null;
 
-        $debutSemaine = now()->startOfWeek(Carbon::MONDAY);
-        $finSemaine = now()->endOfWeek(Carbon::SATURDAY);
+        $trimestreActif = $annee
+            ? Trimestre::where('annee_scolaire_id', $annee->id)
+                ->where('statut', 'actif')
+                ->orderBy('date_debut')
+                ->first()
+            : null;
+
+        $aujourdhui = now();
+        $debutSemaine = $aujourdhui->copy()->startOfWeek(Carbon::MONDAY);
+        $jourCourant = $this->nomJourCourant();
 
         $affectations = ClasseMatiereUser::with([
                 'classe.anneeScolaire',
@@ -485,6 +493,8 @@ class DashboardController extends Controller
                     $q->where('annee_scolaire_id', $annee->id);
                 });
             })
+            ->orderByDesc('statut')
+            ->orderBy('date_debut')
             ->get();
 
         $classeIds = $affectations
@@ -498,7 +508,6 @@ class DashboardController extends Controller
             ->values();
 
         $nombreClasses = $classeIds->count();
-
         $nombreMatieres = $matiereIds->count();
 
         $nombreEleves = Inscription::whereIn('classe_id', $classeIds)
@@ -509,7 +518,7 @@ class DashboardController extends Controller
             ->distinct('eleve_id')
             ->count('eleve_id');
 
-        $nombreEvaluations = Evaluation::whereExists(function ($subQuery) use ($user) {
+        $evaluationBaseQuery = Evaluation::whereExists(function ($subQuery) use ($user) {
                 $subQuery->selectRaw('1')
                     ->from('classe_matiere_users')
                     ->whereColumn('classe_matiere_users.classe_id', 'evaluations.classe_id')
@@ -522,10 +531,68 @@ class DashboardController extends Controller
                 $query->whereHas('classe', function ($q) use ($annee) {
                     $q->where('annee_scolaire_id', $annee->id);
                 });
-            })
-            ->count();
+            });
 
-        $emploisDuTemps = EmploiDuTemps::with([
+        $evaluationIds = (clone $evaluationBaseQuery)->pluck('id');
+
+        $nombreEvaluations = $evaluationIds->count();
+
+        $nombreNotesSaisies = Note::whereIn('evaluation_id', $evaluationIds)->count();
+
+        $inscriptionsParClasse = Inscription::whereIn('classe_id', $classeIds)
+            ->when($annee, function ($query) use ($annee) {
+                $query->where('annee_scolaire_id', $annee->id);
+            })
+            ->where('statut', 'actif')
+            ->selectRaw('classe_id, COUNT(*) as total')
+            ->groupBy('classe_id')
+            ->pluck('total', 'classe_id');
+
+        $evaluationsRecentes = Evaluation::with(['classe', 'matiere', 'trimestre'])
+            ->withCount('notes')
+            ->whereIn('id', $evaluationIds)
+            ->orderByDesc('date_evaluation')
+            ->limit(6)
+            ->get();
+
+        $evaluationsACompleter = Evaluation::with(['classe', 'matiere', 'trimestre'])
+            ->withCount('notes')
+            ->whereIn('id', $evaluationIds)
+            ->orderByDesc('date_evaluation')
+            ->get()
+            ->map(function ($evaluation) use ($inscriptionsParClasse) {
+                $evaluation->total_eleves_attendus = (int) ($inscriptionsParClasse[$evaluation->classe_id] ?? 0);
+
+                return $evaluation;
+            })
+            ->filter(function ($evaluation) {
+                return $evaluation->total_eleves_attendus > 0
+                    && $evaluation->notes_count < $evaluation->total_eleves_attendus;
+            })
+            ->take(5)
+            ->values();
+
+        $notesFaiblesRecentes = Note::with([
+                'inscription.eleve',
+                'inscription.classe',
+                'evaluation.matiere',
+                'evaluation.trimestre',
+            ])
+            ->whereIn('evaluation_id', $evaluationIds)
+            ->orderByDesc('created_at')
+            ->limit(40)
+            ->get()
+            ->filter(function ($note) {
+                $bareme = (float) ($note->evaluation?->bareme ?? 0);
+
+                return $bareme > 0 && ((float) $note->valeur / $bareme) < 0.5;
+            })
+            ->take(5)
+            ->values();
+
+        $nombreNotesFaibles = $notesFaiblesRecentes->count();
+
+        $emploisDuTempsBase = EmploiDuTemps::with([
                 'affectation.classe',
                 'affectation.matiere',
             ])
@@ -539,48 +606,108 @@ class DashboardController extends Controller
                     });
                 }
             })
-            ->whereDate('emploi_du_temps.date_debut', $debutSemaine->toDateString())
-            ->whereHas('affectation', function ($query) use ($debutSemaine, $finSemaine) {
-                $query->whereDate('classe_matiere_users.date_debut', '<=', $finSemaine->toDateString())
-                    ->where(function ($q) use ($debutSemaine) {
-                        $q->whereNull('classe_matiere_users.date_fin')
-                            ->orWhereDate('classe_matiere_users.date_fin', '>=', $debutSemaine->toDateString());
-                    });
+            ->where(function ($query) use ($aujourdhui) {
+                $query->whereNull('date_debut')
+                    ->orWhereDate('date_debut', '<=', $aujourdhui->toDateString());
             })
-            ->orderByRaw($this->ordreJoursSql('emploi_du_temps.jour'))
+            ->where(function ($query) use ($aujourdhui) {
+                $query->whereNull('date_fin')
+                    ->orWhereDate('date_fin', '>=', $aujourdhui->toDateString());
+            });
+
+        $coursAujourdhui = (clone $emploisDuTempsBase)
+            ->where('jour', $jourCourant)
             ->orderBy('heure_debut')
+            ->limit(6)
             ->get();
 
-        $evaluationsRecentes = Evaluation::with(['classe', 'matiere', 'trimestre'])
-            ->whereExists(function ($subQuery) use ($user) {
-                $subQuery->selectRaw('1')
-                    ->from('classe_matiere_users')
-                    ->whereColumn('classe_matiere_users.classe_id', 'evaluations.classe_id')
-                    ->whereColumn('classe_matiere_users.matiere_id', 'evaluations.matiere_id')
-                    ->where('classe_matiere_users.user_id', $user->id)
-                    ->whereIn('classe_matiere_users.statut', ['actif', 'termine'])
-                    ->whereNull('classe_matiere_users.deleted_at');
-            })
-            ->when($annee, function ($query) use ($annee) {
-                $query->whereHas('classe', function ($q) use ($annee) {
-                    $q->where('annee_scolaire_id', $annee->id);
-                });
-            })
-            ->orderByDesc('date_evaluation')
+        $prochainsCours = (clone $emploisDuTempsBase)
+            ->orderByRaw($this->ordreJoursSql('emploi_du_temps.jour'))
+            ->orderBy('heure_debut')
+            ->limit(8)
+            ->get();
+
+        $absencesSemaine = AbsenceRetard::where('enregistre_par', $user->id)
+            ->where('type', 'absence')
+            ->whereDate('created_at', '>=', $debutSemaine->toDateString())
+            ->count();
+
+        $retardsAujourdhui = AbsenceRetard::where('enregistre_par', $user->id)
+            ->where('type', 'retard')
+            ->whereDate('created_at', $aujourdhui->toDateString())
+            ->count();
+
+        $dernieresAbsencesRetards = AbsenceRetard::with(['inscription.eleve', 'inscription.classe'])
+            ->where('enregistre_par', $user->id)
+            ->orderByDesc('created_at')
             ->limit(5)
+            ->get();
+
+        $annoncesActives = Annonce::where('est_publiee', true)
+            ->where(function ($query) {
+                $query->whereNull('date_expiration')
+                    ->orWhere('date_expiration', '>=', now());
+            })
+            ->where(function ($query) use ($classeIds) {
+                $query->whereIn('cible', ['tous', 'enseignants'])
+                    ->orWhere(function ($q) use ($classeIds) {
+                        $q->where('cible', 'classe')
+                            ->whereIn('classe_id', $classeIds);
+                    });
+            })
+            ->count();
+
+        $dernieresAnnonces = Annonce::with(['auteur', 'classe'])
+            ->where('est_publiee', true)
+            ->where(function ($query) {
+                $query->whereNull('date_expiration')
+                    ->orWhere('date_expiration', '>=', now());
+            })
+            ->where(function ($query) use ($classeIds) {
+                $query->whereIn('cible', ['tous', 'enseignants'])
+                    ->orWhere(function ($q) use ($classeIds) {
+                        $q->where('cible', 'classe')
+                            ->whereIn('classe_id', $classeIds);
+                    });
+            })
+            ->orderByDesc('date_publication')
+            ->orderByDesc('created_at')
+            ->limit(3)
+            ->get();
+
+        $notificationsNonLues = NotificationUtilisateur::where('user_id', $user->id)
+            ->where('lue', false)
+            ->count();
+
+        $dernieresNotifications = NotificationUtilisateur::where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->limit(4)
             ->get();
 
         return view('dashboard.enseignant', compact(
             'annees',
             'annee',
+            'trimestreActif',
             'selectedAnneeId',
             'affectations',
             'nombreClasses',
             'nombreMatieres',
             'nombreEleves',
             'nombreEvaluations',
-            'emploisDuTemps',
-            'evaluationsRecentes'
+            'nombreNotesSaisies',
+            'coursAujourdhui',
+            'prochainsCours',
+            'evaluationsRecentes',
+            'evaluationsACompleter',
+            'notesFaiblesRecentes',
+            'nombreNotesFaibles',
+            'absencesSemaine',
+            'retardsAujourdhui',
+            'dernieresAbsencesRetards',
+            'annoncesActives',
+            'dernieresAnnonces',
+            'notificationsNonLues',
+            'dernieresNotifications'
         ));
     }
 
@@ -590,6 +717,19 @@ class DashboardController extends Controller
             ->orderByDesc('date_debut')
             ->first()
             ?? AnneeScolaire::orderByDesc('date_debut')->first();
+    }
+
+    private function nomJourCourant(): string
+    {
+        return match ((int) now()->dayOfWeekIso) {
+            1 => 'lundi',
+            2 => 'mardi',
+            3 => 'mercredi',
+            4 => 'jeudi',
+            5 => 'vendredi',
+            6 => 'samedi',
+            default => 'dimanche',
+        };
     }
 
     private function ordreJoursSql(string $colonne): string
