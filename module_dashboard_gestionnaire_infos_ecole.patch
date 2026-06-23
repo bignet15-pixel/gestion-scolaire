@@ -1,0 +1,143 @@
+diff --git a/app/Http/Controllers/DashboardController.php b/app/Http/Controllers/DashboardController.php
+index f5b4889..b7a68cd 100644
+--- a/app/Http/Controllers/DashboardController.php
++++ b/app/Http/Controllers/DashboardController.php
+@@ -411,6 +411,13 @@ private function dashboardGestionnaire(Request $request)
+             ->limit(4)
+             ->get();
+ 
++        $ecoleInfos = [
++            'nom' => 'Bangre Zaaka',
++            'contact' => 'contact@gmail.com | +226 25000000',
++            'devise' => 'Objectif Courage Concentration Réussite',
++            'description' => 'Informations utilisées dans le tableau de bord, les reçus et les documents scolaires.',
++        ];
++
+         return view('dashboard.gestionnaire', compact(
+             'annees',
+             'annee',
+@@ -443,7 +450,8 @@ private function dashboardGestionnaire(Request $request)
+             'annoncesActives',
+             'dernieresAnnonces',
+             'notificationsNonLues',
+-            'dernieresNotifications'
++            'dernieresNotifications',
++            'ecoleInfos'
+         ));
+     }
+ 
+diff --git a/resources/views/dashboard/gestionnaire.blade.php b/resources/views/dashboard/gestionnaire.blade.php
+index 7ec67ba..9b47744 100644
+--- a/resources/views/dashboard/gestionnaire.blade.php
++++ b/resources/views/dashboard/gestionnaire.blade.php
+@@ -68,6 +68,73 @@
+             font-size: 16px;
+         }
+ 
++        .manager-school-card {
++            display: grid;
++            grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
++            gap: 18px;
++            align-items: stretch;
++            padding: 20px;
++            border: 1px solid #dbeafe;
++            border-radius: 22px;
++            background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
++            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.07);
++        }
++
++        .manager-school-main {
++            display: grid;
++            gap: 8px;
++            align-content: center;
++        }
++
++        .manager-school-label {
++            color: var(--muted);
++            font-size: 12px;
++            font-weight: 950;
++            text-transform: uppercase;
++            letter-spacing: 0.08em;
++        }
++
++        .manager-school-name {
++            margin: 0;
++            color: var(--primary-dark);
++            font-size: clamp(24px, 3vw, 34px);
++            font-weight: 950;
++            line-height: 1.05;
++        }
++
++        .manager-school-description {
++            margin: 0;
++            color: var(--muted);
++            line-height: 1.6;
++        }
++
++        .manager-school-details {
++            display: grid;
++            gap: 10px;
++        }
++
++        .manager-school-detail {
++            padding: 13px 14px;
++            border: 1px solid #dbeafe;
++            border-radius: 16px;
++            background: rgba(255, 255, 255, 0.82);
++        }
++
++        .manager-school-detail span {
++            display: block;
++            color: var(--muted);
++            font-size: 12px;
++            font-weight: 900;
++            text-transform: uppercase;
++        }
++
++        .manager-school-detail strong {
++            display: block;
++            margin-top: 4px;
++            color: var(--primary-dark);
++            line-height: 1.45;
++        }
++
+         .manager-filter-card {
+             padding: 18px;
+         }
+@@ -357,7 +424,8 @@
+         }
+ 
+         @media (max-width: 760px) {
+-            .manager-hero {
++            .manager-hero,
++            .manager-school-card {
+                 grid-template-columns: 1fr;
+                 padding: 20px;
+             }
+@@ -419,6 +487,26 @@
+             </div>
+         </section>
+ 
++        <section class="manager-school-card">
++            <div class="manager-school-main">
++                <div class="manager-school-label">Information école</div>
++                <h2 class="manager-school-name">{{ $ecoleInfos['nom'] }}</h2>
++                <p class="manager-school-description">{{ $ecoleInfos['description'] }}</p>
++            </div>
++
++            <div class="manager-school-details">
++                <div class="manager-school-detail">
++                    <span>Contact</span>
++                    <strong>{{ $ecoleInfos['contact'] }}</strong>
++                </div>
++
++                <div class="manager-school-detail">
++                    <span>Devise</span>
++                    <strong>{{ $ecoleInfos['devise'] }}</strong>
++                </div>
++            </div>
++        </section>
++
+         <div class="card manager-filter-card">
+             <form action="{{ route('dashboard') }}" method="GET" class="filter-form filter-form-large">
+                 <div class="form-group">

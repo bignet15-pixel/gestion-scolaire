@@ -12,6 +12,11 @@ use App\Models\Paiement;
 use App\Models\PaiementDeclare;
 use App\Models\DemandeReinscription;
 use App\Models\SanctionAppliquee;
+use App\Models\Annonce;
+use App\Models\JustificationAbsenceRetard;
+use App\Models\Note;
+use App\Models\NotificationUtilisateur;
+use App\Models\Trimestre;
 use App\Models\User;
 use App\Models\AnneeScolaire;
 use Carbon\Carbon;
@@ -151,21 +156,33 @@ class DashboardController extends Controller
             ? $annees->first(fn ($annee) => (string) $annee->id === (string) $selectedAnneeId)
             : null;
 
-        $nombreEleves = Inscription::when($annee, function ($query) use ($annee) {
+        $trimestreActif = $annee
+            ? Trimestre::where('annee_scolaire_id', $annee->id)
+                ->where('statut', 'actif')
+                ->orderBy('date_debut')
+                ->first()
+            : null;
+
+        $filtreAnneeInscription = function ($query) use ($annee) {
+            if ($annee) {
                 $query->where('annee_scolaire_id', $annee->id);
-            })
+            }
+        };
+
+        $filtreAnneeClasse = function ($query) use ($annee) {
+            if ($annee) {
+                $query->where('annee_scolaire_id', $annee->id);
+            }
+        };
+
+        $nombreEleves = Inscription::when($annee, $filtreAnneeInscription)
             ->where('statut', 'actif')
             ->distinct('eleve_id')
             ->count('eleve_id');
 
-        $nombreClasses = Classe::when($annee, function ($query) use ($annee) {
-                $query->where('annee_scolaire_id', $annee->id);
-            })
-            ->count();
+        $nombreClasses = Classe::when($annee, $filtreAnneeClasse)->count();
 
-        $enseignantPrincipalIds = Classe::when($annee, function ($query) use ($annee) {
-                $query->where('annee_scolaire_id', $annee->id);
-            })
+        $enseignantPrincipalIds = Classe::when($annee, $filtreAnneeClasse)
             ->whereNotNull('enseignant_principal_id')
             ->pluck('enseignant_principal_id');
 
@@ -182,10 +199,16 @@ class DashboardController extends Controller
             ->unique()
             ->count();
 
-        $nombreInscriptions = Inscription::when($annee, function ($query) use ($annee) {
-                $query->where('annee_scolaire_id', $annee->id);
+        $nombreParents = User::where('role', 'parent')
+            ->when($annee, function ($query) use ($annee) {
+                $query->whereHas('enfants.inscriptions', function ($q) use ($annee) {
+                    $q->where('annee_scolaire_id', $annee->id)
+                        ->where('statut', 'actif');
+                });
             })
             ->count();
+
+        $nombreInscriptions = Inscription::when($annee, $filtreAnneeInscription)->count();
 
         $nombreEvaluations = Evaluation::when($annee, function ($query) use ($annee) {
                 $query->whereHas('classe', function ($q) use ($annee) {
@@ -194,34 +217,13 @@ class DashboardController extends Controller
             })
             ->count();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Calcul financier global fiable
-        |--------------------------------------------------------------------------
-        |
-        | On récupère toutes les inscriptions.
-        | Pour chaque inscription, on calcule :
-        | - frais attendu
-        | - total payé
-        | - reste à payer
-        |
-        */
-
         $inscriptionsFinance = Inscription::withSum('paiements as total_paye', 'montant')
-            ->when($annee, function ($query) use ($annee) {
-                $query->where('annee_scolaire_id', $annee->id);
-            })
+            ->when($annee, $filtreAnneeInscription)
             ->get()
             ->map(function ($inscription) {
                 $fraisAttendu = (float) $inscription->frais_attendu;
-
                 $totalPaye = (float) ($inscription->total_paye ?? 0);
-
-                $reste = $fraisAttendu - $totalPaye;
-
-                if ($reste < 0) {
-                    $reste = 0;
-                }
+                $reste = max(0, $fraisAttendu - $totalPaye);
 
                 $inscription->total_paye_calcule = $totalPaye;
                 $inscription->reste_calcule = $reste;
@@ -230,22 +232,15 @@ class DashboardController extends Controller
             });
 
         $totalFraisAttendus = $inscriptionsFinance->sum('frais_attendu');
-
         $totalFraisCollectes = $inscriptionsFinance->sum('total_paye_calcule');
-
         $totalRestant = $inscriptionsFinance->sum('reste_calcule');
 
         $nombreImpayes = $inscriptionsFinance
-            ->filter(function ($inscription) {
-                return $inscription->reste_calcule > 0;
-            })
+            ->filter(fn ($inscription) => $inscription->reste_calcule > 0)
             ->count();
 
         $nombreSoldes = $inscriptionsFinance
-            ->filter(function ($inscription) {
-                return $inscription->frais_attendu > 0
-                    && $inscription->reste_calcule <= 0;
-            })
+            ->filter(fn ($inscription) => $inscription->frais_attendu > 0 && $inscription->reste_calcule <= 0)
             ->count();
 
         $tauxRecouvrement = $totalFraisAttendus > 0
@@ -253,12 +248,13 @@ class DashboardController extends Controller
             : 0;
 
         $classes = Classe::with(['anneeScolaire', 'enseignantPrincipal'])
-            ->withCount('inscriptions')
-            ->when($annee, function ($query) use ($annee) {
-                $query->where('annee_scolaire_id', $annee->id);
-            })
-            ->orderBy('annee_scolaire_id')
+            ->withCount(['inscriptions' => function ($query) {
+                $query->where('statut', 'actif');
+            }])
+            ->when($annee, $filtreAnneeClasse)
             ->orderBy('niveau')
+            ->orderBy('nom')
+            ->limit(8)
             ->get();
 
         $derniersPaiements = Paiement::with([
@@ -275,13 +271,162 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
+        $paiementsDeclaresEnAttente = PaiementDeclare::where('statut', PaiementDeclare::STATUT_EN_ATTENTE)
+            ->when($annee, function ($query) use ($annee) {
+                $query->whereHas('inscription', function ($q) use ($annee) {
+                    $q->where('annee_scolaire_id', $annee->id);
+                });
+            })
+            ->count();
+
+        $justificationsEnAttente = JustificationAbsenceRetard::where('statut', JustificationAbsenceRetard::STATUT_EN_ATTENTE)
+            ->when($annee, function ($query) use ($annee) {
+                $query->whereHas('absenceRetard.inscription', function ($q) use ($annee) {
+                    $q->where('annee_scolaire_id', $annee->id);
+                });
+            })
+            ->count();
+
+        $reinscriptionsEnAttente = DemandeReinscription::where('statut', DemandeReinscription::STATUT_EN_ATTENTE)
+            ->when($annee, function ($query) use ($annee) {
+                $query->where(function ($q) use ($annee) {
+                    $q->where('nouvelle_annee_scolaire_id', $annee->id)
+                        ->orWhereHas('ancienneInscription', function ($sq) use ($annee) {
+                            $sq->where('annee_scolaire_id', $annee->id);
+                        });
+                });
+            })
+            ->count();
+
+        $totalDemandesEnAttente = $paiementsDeclaresEnAttente + $justificationsEnAttente + $reinscriptionsEnAttente;
+
+        $debutSemaine = now()->startOfWeek(Carbon::MONDAY)->toDateString();
+
+        $absencesSemaine = AbsenceRetard::where('type', 'absence')
+            ->whereDate('date_debut', '>=', $debutSemaine)
+            ->when($annee, function ($query) use ($annee) {
+                $query->whereHas('inscription', function ($q) use ($annee) {
+                    $q->where('annee_scolaire_id', $annee->id);
+                });
+            })
+            ->count();
+
+        $retardsAujourdhui = AbsenceRetard::where('type', 'retard')
+            ->whereDate('date_debut', now()->toDateString())
+            ->when($annee, function ($query) use ($annee) {
+                $query->whereHas('inscription', function ($q) use ($annee) {
+                    $q->where('annee_scolaire_id', $annee->id);
+                });
+            })
+            ->count();
+
+        $sanctionsRecentes = SanctionAppliquee::whereIn('statut', ['appliquee', 'terminee'])
+            ->whereDate('created_at', '>=', now()->subDays(7)->toDateString())
+            ->when($annee, function ($query) use ($annee) {
+                $query->whereHas('inscription', function ($q) use ($annee) {
+                    $q->where('annee_scolaire_id', $annee->id);
+                });
+            })
+            ->count();
+
+        $notesPourAlertes = Note::with(['evaluation:id,bareme,trimestre_id,classe_id'])
+            ->whereHas('evaluation', function ($query) use ($annee, $trimestreActif) {
+                if ($annee) {
+                    $query->whereHas('classe', function ($q) use ($annee) {
+                        $q->where('annee_scolaire_id', $annee->id);
+                    });
+                }
+
+                if ($trimestreActif) {
+                    $query->where('trimestre_id', $trimestreActif->id);
+                }
+            })
+            ->get();
+
+        $notesFaibles = $notesPourAlertes
+            ->filter(function ($note) {
+                $bareme = (float) ($note->evaluation?->bareme ?? 0);
+
+                return $bareme > 0 && ((float) $note->valeur / $bareme) < 0.5;
+            })
+            ->count();
+
+        $dernieresAbsencesRetards = AbsenceRetard::with(['inscription.eleve', 'inscription.classe'])
+            ->when($annee, function ($query) use ($annee) {
+                $query->whereHas('inscription', function ($q) use ($annee) {
+                    $q->where('annee_scolaire_id', $annee->id);
+                });
+            })
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get();
+
+        $dernieresNotesFaibles = Note::with([
+                'inscription.eleve',
+                'inscription.classe',
+                'evaluation.matiere',
+                'evaluation.trimestre',
+            ])
+            ->whereHas('evaluation', function ($query) use ($annee, $trimestreActif) {
+                if ($annee) {
+                    $query->whereHas('classe', function ($q) use ($annee) {
+                        $q->where('annee_scolaire_id', $annee->id);
+                    });
+                }
+
+                if ($trimestreActif) {
+                    $query->where('trimestre_id', $trimestreActif->id);
+                }
+            })
+            ->orderByDesc('created_at')
+            ->limit(25)
+            ->get()
+            ->filter(function ($note) {
+                $bareme = (float) ($note->evaluation?->bareme ?? 0);
+
+                return $bareme > 0 && ((float) $note->valeur / $bareme) < 0.5;
+            })
+            ->take(5);
+
+        $annoncesActives = Annonce::where('est_publiee', true)
+            ->where(function ($query) {
+                $query->whereNull('date_expiration')
+                    ->orWhere('date_expiration', '>=', now());
+            })
+            ->count();
+
+        $dernieresAnnonces = Annonce::with(['auteur', 'classe'])
+            ->where('est_publiee', true)
+            ->orderByDesc('date_publication')
+            ->orderByDesc('created_at')
+            ->limit(3)
+            ->get();
+
+        $notificationsNonLues = NotificationUtilisateur::where('user_id', Auth::id())
+            ->where('lue', false)
+            ->count();
+
+        $dernieresNotifications = NotificationUtilisateur::where('user_id', Auth::id())
+            ->orderByDesc('created_at')
+            ->limit(4)
+            ->get();
+
+        $ecoleInfos = [
+            'nom' => 'Bangre Zaaka',
+            'contact' => 'contact@gmail.com | +226 25000000',
+            'devise' => 'Objectif Courage Concentration Réussite',
+            'description' => 'Informations utilisées dans le tableau de bord, les reçus et les documents scolaires.',
+        ];
+
         return view('dashboard.gestionnaire', compact(
             'annees',
             'annee',
+            'trimestreActif',
             'selectedAnneeId',
             'nombreEleves',
             'nombreClasses',
             'nombreEnseignants',
+            'nombreParents',
             'nombreInscriptions',
             'nombreEvaluations',
             'totalFraisAttendus',
@@ -291,7 +436,22 @@ class DashboardController extends Controller
             'nombreSoldes',
             'tauxRecouvrement',
             'classes',
-            'derniersPaiements'
+            'derniersPaiements',
+            'paiementsDeclaresEnAttente',
+            'justificationsEnAttente',
+            'reinscriptionsEnAttente',
+            'totalDemandesEnAttente',
+            'absencesSemaine',
+            'retardsAujourdhui',
+            'sanctionsRecentes',
+            'notesFaibles',
+            'dernieresAbsencesRetards',
+            'dernieresNotesFaibles',
+            'annoncesActives',
+            'dernieresAnnonces',
+            'notificationsNonLues',
+            'dernieresNotifications',
+            'ecoleInfos'
         ));
     }
 

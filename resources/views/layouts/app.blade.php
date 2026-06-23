@@ -400,6 +400,8 @@
         });
 
         function prepareResponsiveTables() {
+            const isSmallScreen = window.innerWidth <= 900;
+
             document.querySelectorAll('main table').forEach(function (table) {
                 let wrapper = table.closest('.responsive-table-shell') || table.closest('.table-responsive');
 
@@ -421,45 +423,71 @@
                     cell.removeAttribute('data-label');
                 });
 
-                wrapper.style.display = 'block';
-                wrapper.style.width = '100%';
-                wrapper.style.maxWidth = '100%';
-                wrapper.style.overflowX = 'auto';
-                wrapper.style.overflowY = 'hidden';
-                wrapper.style.webkitOverflowScrolling = 'touch';
-                wrapper.style.touchAction = 'pan-x';
-                wrapper.style.border = '1px solid #e5e7eb';
-                wrapper.style.borderRadius = '14px';
-                wrapper.style.background = '#ffffff';
-
-                table.style.display = 'table';
-                table.style.width = 'max-content';
-                table.style.minWidth = window.innerWidth <= 430 ? '900px' : '980px';
-                table.style.maxWidth = 'none';
-                table.style.tableLayout = 'auto';
-                table.style.whiteSpace = 'nowrap';
-
-                table.querySelectorAll('thead, tbody, tr, th, td').forEach(function (el) {
-                    el.style.whiteSpace = 'nowrap';
-                });
-
-                // Nettoyer les anciens messages dupliqués.
                 wrapper.querySelectorAll('.table-scroll-hint').forEach(function (hint) {
                     hint.remove();
                 });
 
-                const hint = document.createElement('div');
-                hint.className = 'table-scroll-hint';
-                hint.textContent = 'Faire glisser horizontalement pour voir la suite →';
-                wrapper.appendChild(hint);
+                if (isSmallScreen) {
+                    wrapper.style.display = 'block';
+                    wrapper.style.width = '100%';
+                    wrapper.style.maxWidth = '100%';
+                    wrapper.style.overflowX = 'auto';
+                    wrapper.style.overflowY = 'hidden';
+                    wrapper.style.webkitOverflowScrolling = 'touch';
+                    wrapper.style.touchAction = 'pan-x';
+                    wrapper.style.border = '1px solid #e5e7eb';
+                    wrapper.style.borderRadius = '14px';
+                    wrapper.style.background = '#ffffff';
 
-                // Permettre le glisser horizontal avec la souris en mode mobile navigateur.
+                    table.style.display = 'table';
+                    table.style.width = 'max-content';
+                    table.style.minWidth = window.innerWidth <= 430 ? '900px' : '980px';
+                    table.style.maxWidth = 'none';
+                    table.style.tableLayout = 'auto';
+                    table.style.whiteSpace = 'nowrap';
+
+                    table.querySelectorAll('thead, tbody, tr, th, td').forEach(function (el) {
+                        el.style.whiteSpace = 'nowrap';
+                    });
+
+                    const hint = document.createElement('div');
+                    hint.className = 'table-scroll-hint';
+                    hint.textContent = 'Faire glisser horizontalement pour voir la suite →';
+                    wrapper.appendChild(hint);
+                } else {
+                    wrapper.style.display = '';
+                    wrapper.style.width = '100%';
+                    wrapper.style.maxWidth = '100%';
+                    wrapper.style.overflowX = 'visible';
+                    wrapper.style.overflowY = '';
+                    wrapper.style.webkitOverflowScrolling = '';
+                    wrapper.style.touchAction = '';
+                    wrapper.style.border = '';
+                    wrapper.style.borderRadius = '';
+                    wrapper.style.background = '';
+
+                    table.style.display = '';
+                    table.style.width = '100%';
+                    table.style.minWidth = '';
+                    table.style.maxWidth = '100%';
+                    table.style.tableLayout = '';
+                    table.style.whiteSpace = '';
+
+                    table.querySelectorAll('thead, tbody, tr, th, td').forEach(function (el) {
+                        el.style.whiteSpace = '';
+                    });
+                }
+
                 if (!wrapper.dataset.dragScrollReady) {
                     let isDown = false;
                     let startX = 0;
                     let startScrollLeft = 0;
 
                     wrapper.addEventListener('pointerdown', function (event) {
+                        if (window.innerWidth > 900) {
+                            return;
+                        }
+
                         isDown = true;
                         startX = event.clientX;
                         startScrollLeft = wrapper.scrollLeft;
