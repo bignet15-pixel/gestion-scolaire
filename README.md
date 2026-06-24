@@ -169,6 +169,45 @@ Il cree notamment :
 - des notes pour les compositions de `CP1 A` ;
 - des paiements complets et partiels pour tester les impayes.
 
+
+
+## API parent mobile
+
+Le projet expose une API REST pour l'application mobile parent Android native en Kotlin.
+
+Base URL locale :
+
+```text
+http://127.0.0.1:8000/api/parent
+```
+
+Authentification : Laravel Sanctum avec token Bearer.
+
+Fonctionnalites principales :
+
+- connexion, deconnexion, profil parent, changement de mot de passe ;
+- mot de passe oublie par OTP email ;
+- liste des enfants du parent ;
+- dashboard detaille de chaque enfant ;
+- notes, resultats, bulletins PDF, paiements et recus PDF ;
+- paiements declares, preuves de paiement ;
+- absences, retards, justifications et pieces jointes ;
+- sanctions, reinscription, annonces et notifications.
+
+Documentation API :
+
+```text
+docs/API_PARENT_MOBILE.md
+docs/GUIDE_TEST_API_PARENT.md
+docs/PLAN_MOBILE_KOTLIN.md
+```
+
+Routes :
+
+```bash
+php artisan route:list --path=api/parent
+```
+
 ## Structure utile
 
 ```text
