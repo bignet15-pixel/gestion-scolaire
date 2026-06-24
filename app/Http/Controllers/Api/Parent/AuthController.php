@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
@@ -90,6 +91,28 @@ class AuthController extends Controller
     {
         return $this->success('Profil récupéré avec succès.', [
             'user' => $this->formatUser($request->user()),
+        ]);
+    }
+
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'nom' => ['required', 'string', 'max:100'],
+            'prenom' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'string', 'email', 'max:190', Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'sexe' => ['nullable', Rule::in(['M', 'F'])],
+            'adresse' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $validated['name'] = trim($validated['prenom'].' '.$validated['nom']);
+
+        $user->update($validated);
+
+        return $this->success('Profil modifié avec succès.', [
+            'user' => $this->formatUser($user->fresh()),
         ]);
     }
 
