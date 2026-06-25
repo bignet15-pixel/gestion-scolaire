@@ -480,17 +480,18 @@
         </div>
 
         <div class="card" id="reinscription">
-            <h2>Réinscription</h2>
+            <h2>Inscription / Réinscription</h2>
 
-            @if (($reinscriptionOption['possible'] ?? false) && $inscriptionPrincipale)
+            @if (($reinscriptionOption['possible'] ?? false))
                 <div class="alert alert-info">
-                    Décision système : {{ str_replace('_', ' ', $reinscriptionOption['decision_systeme']) }}.
-                    Année suivante : {{ $reinscriptionOption['nouvelle_annee']->libelle }}.
+                    Année demandée : {{ $reinscriptionOption['nouvelle_annee']->libelle ?? '-' }}.
                 </div>
 
                 <form action="{{ route('parent.demandes-reinscription.store', $eleve) }}" method="POST" class="form-grid">
                     @csrf
-                    <input type="hidden" name="ancienne_inscription_id" value="{{ $inscriptionPrincipale->id }}">
+                    @if ($inscriptionPrincipale)
+                        <input type="hidden" name="ancienne_inscription_id" value="{{ $inscriptionPrincipale->id }}">
+                    @endif
 
                     <div class="form-group">
                         <label class="form-label">Classe demandée</label>
@@ -504,17 +505,19 @@
                     </div>
 
                     <div class="form-group form-group-full">
-                        <label class="form-label">Commentaire parent</label>
-                        <textarea name="commentaire_parent" class="form-control" rows="3"></textarea>
+                        <label class="form-label">Commentaire</label>
+                        <textarea name="commentaire_parent" class="form-control" rows="3" placeholder="Votre message pour l’école"></textarea>
                     </div>
 
                     <div class="form-actions form-group-full">
-                        <button type="submit" class="btn btn-primary">Envoyer la demande</button>
+                        <button type="submit" class="btn btn-primary">
+                            {{ ($reinscriptionOption['type_demande'] ?? null) === \App\Models\DemandeReinscription::TYPE_PREMIERE_INSCRIPTION ? 'Envoyer la demande d’inscription' : 'Envoyer la demande de réinscription' }}
+                        </button>
                     </div>
                 </form>
             @else
                 <div class="result-unpublished-box">
-                    {{ $reinscriptionOption['raison'] ?? 'Réinscription non disponible.' }}
+                    {{ $reinscriptionOption['raison'] ?? 'Aucune demande disponible pour le moment.' }}
                 </div>
             @endif
 
@@ -526,7 +529,7 @@
                     <thead>
                         <tr>
                             <th>Date</th>
-                            <th>Année suivante</th>
+                            <th>Année demandée</th>
                             <th>Classe demandée</th>
                             <th>Type</th>
                             <th>Statut</th>
@@ -545,7 +548,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6">Aucune demande de réinscription.</td>
+                                <td colspan="6">Aucune demande d’inscription ou de réinscription.</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -623,7 +623,7 @@ class EnfantDetailController extends Controller
 
         $option = $inscription
             ? $this->reinscriptionService->optionPourInscription($inscription)
-            : ['possible' => false, 'raison' => 'Aucune inscription sélectionnée.'];
+            : $this->reinscriptionService->optionPremiereInscription($eleve, $contexte['annee']);
 
         $demandes = DemandeReinscription::with([
                 'ancienneInscription.classe.anneeScolaire',
@@ -657,11 +657,17 @@ class EnfantDetailController extends Controller
             'commentaire_parent' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $inscription = $this->inscriptionAction($eleve, $validated['ancienne_inscription_id'] ?? null);
         $classeDemandee = Classe::with('anneeScolaire')->findOrFail($validated['classe_demandee_id']);
+        $inscription = null;
+        $estPremiereInscription = ! Inscription::query()->where('eleve_id', $eleve->id)->exists();
 
         try {
-            $option = $this->reinscriptionService->verifierClasseAutorisee($inscription, $classeDemandee);
+            if ($estPremiereInscription) {
+                $option = $this->reinscriptionService->verifierClassePremiereInscription($eleve, $classeDemandee);
+            } else {
+                $inscription = $this->inscriptionAction($eleve, $validated['ancienne_inscription_id'] ?? null);
+                $option = $this->reinscriptionService->verifierClasseAutorisee($inscription, $classeDemandee);
+            }
         } catch (RuntimeException $exception) {
             return $this->error($exception->getMessage(), 422);
         }
@@ -669,8 +675,8 @@ class EnfantDetailController extends Controller
         $demande = DemandeReinscription::create([
             'eleve_id' => $eleve->id,
             'parent_id' => $request->user()->id,
-            'ancienne_inscription_id' => $inscription->id,
-            'ancienne_classe_id' => $inscription->classe_id,
+            'ancienne_inscription_id' => $inscription?->id,
+            'ancienne_classe_id' => $inscription?->classe_id,
             'nouvelle_annee_scolaire_id' => $option['nouvelle_annee']->id,
             'classe_demandee_id' => $classeDemandee->id,
             'type_demande' => $option['type_demande'],
@@ -688,7 +694,11 @@ class EnfantDetailController extends Controller
             'validePar',
         ]);
 
-        return $this->success('Demande de réinscription envoyée. Elle attend la validation du gestionnaire.', [
+        $message = ($demande->type_demande === DemandeReinscription::TYPE_PREMIERE_INSCRIPTION)
+            ? 'Demande de première inscription envoyée. Elle attend la validation du gestionnaire.'
+            : 'Demande de réinscription envoyée. Elle attend la validation du gestionnaire.';
+
+        return $this->success($message, [
             'demande' => $this->formatDemandeReinscription($demande),
         ], 201);
     }
@@ -1197,10 +1207,11 @@ class EnfantDetailController extends Controller
             return null;
         }
 
-        /** @var FilesystemAdapter $disk */
-        $disk = Storage::disk('public');
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
 
-        return $disk->url($path);
+        return url('/storage/' . ltrim($path, '/'));
     }
 
     private function dateValue($value): ?string

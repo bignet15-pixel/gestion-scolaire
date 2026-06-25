@@ -121,12 +121,10 @@ class ParentEleveController extends Controller
 
         $reinscriptionOption = $inscriptionPrincipale
             ? $this->reinscriptionService->optionPourInscription($inscriptionPrincipale)
-            : [
-                'possible' => false,
-                'raison' => 'Aucune inscription sélectionnée.',
-                'classes_disponibles' => collect(),
-                'demande_en_attente' => null,
-            ];
+            : $this->reinscriptionService->optionPremiereInscription(
+                $eleve,
+                $selectedAnneeId ? $annees->firstWhere('id', (int) $selectedAnneeId) : $anneeActive
+            );
 
         $demandesReinscription = DemandeReinscription::with([
                 'classeDemandee',

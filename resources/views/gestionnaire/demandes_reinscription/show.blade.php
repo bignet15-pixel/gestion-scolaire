@@ -17,8 +17,8 @@
         <div class="detail-header-card request-detail-hero">
             <div>
                 <div class="detail-kicker">Demande parentale</div>
-                <h1>Demande de réinscription</h1>
-                <p>Valide uniquement si la classe demandée respecte les conditions du système.</p>
+                <h1>{{ $demande->type_demande === \App\Models\DemandeReinscription::TYPE_PREMIERE_INSCRIPTION ? 'Demande de première inscription' : 'Demande de réinscription' }}</h1>
+                <p>Vérifiez la classe demandée puis validez ou refusez la demande parentale.</p>
             </div>
             <a href="{{ route('gestionnaire.demandes-reinscription.index') }}" class="btn">Retour à la liste</a>
         </div>
@@ -55,10 +55,6 @@
                         <strong>Type de demande</strong>
                         <p>{{ $demande->libelleTypeDemande() }}</p>
                     </div>
-                    <div>
-                        <strong>Décision système</strong>
-                        <p>{{ $demande->libelleDecisionSysteme() }}</p>
-                    </div>
                     <div class="info-grid-full">
                         <strong>Commentaire du parent</strong>
                         <p>{{ $demande->commentaire_parent ?? 'Aucun commentaire.' }}</p>
@@ -80,7 +76,7 @@
                 <h2>Traitement</h2>
 
                 @if ($demande->estEnAttente())
-                    <form action="{{ route('gestionnaire.demandes-reinscription.valider', $demande) }}" method="POST" data-confirm="Valider cette réinscription et créer l’inscription officielle ?" class="decision-box decision-box-success">
+                    <form action="{{ route('gestionnaire.demandes-reinscription.valider', $demande) }}" method="POST" data-confirm="Valider cette demande et créer l’inscription officielle ?" class="decision-box decision-box-success">
                         @csrf
                         <h3>Valider</h3>
                         <p>L’inscription officielle sera créée dans la classe demandée.</p>
@@ -88,7 +84,7 @@
                         <button type="submit" class="btn btn-success">Valider</button>
                     </form>
 
-                    <form action="{{ route('gestionnaire.demandes-reinscription.refuser', $demande) }}" method="POST" data-confirm="Refuser cette demande de réinscription ?" class="decision-box decision-box-danger">
+                    <form action="{{ route('gestionnaire.demandes-reinscription.refuser', $demande) }}" method="POST" data-confirm="Refuser cette demande parentale ?" class="decision-box decision-box-danger">
                         @csrf
                         <h3>Refuser</h3>
                         <p>Indique clairement pourquoi la demande ne peut pas être acceptée.</p>

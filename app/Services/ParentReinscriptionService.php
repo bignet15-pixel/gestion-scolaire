@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AnneeScolaire;
 use App\Models\Classe;
 use App\Models\DemandeReinscription;
+use App\Models\Eleve;
 use App\Models\Inscription;
 use RuntimeException;
 
@@ -22,7 +23,7 @@ class ParentReinscriptionService
      * Le parent ne choisit pas librement : la décision annuelle contrôle
      * si l'élève peut passer ou doit redoubler.
      */
-    public function optionPourInscription(Inscription $inscription): array
+    public function optionPourInscription(Inscription $inscription, ?int $ignorerDemandeId = null): array
     {
         $inscription->loadMissing([
             'eleve',
@@ -65,6 +66,7 @@ class ParentReinscriptionService
             ->where('eleve_id', $inscription->eleve_id)
             ->where('nouvelle_annee_scolaire_id', $nouvelleAnnee->id)
             ->where('statut', DemandeReinscription::STATUT_EN_ATTENTE)
+            ->when($ignorerDemandeId, fn ($query) => $query->where('id', '!=', $ignorerDemandeId))
             ->latest()
             ->first();
 
@@ -126,9 +128,99 @@ class ParentReinscriptionService
         ];
     }
 
-    public function verifierClasseAutorisee(Inscription $inscription, Classe $classe): array
+
+    /**
+     * Prépare une demande de première inscription pour un élève déjà lié au parent,
+     * mais qui ne possède encore aucune inscription officielle.
+     */
+    public function optionPremiereInscription(Eleve $eleve, ?AnneeScolaire $annee = null, ?int $ignorerDemandeId = null): array
     {
-        $option = $this->optionPourInscription($inscription);
+        $annee ??= AnneeScolaire::query()
+            ->where('active', true)
+            ->orderByDesc('date_debut')
+            ->first()
+            ?? AnneeScolaire::query()->orderByDesc('date_debut')->first();
+
+        if (! $annee) {
+            return $this->indisponible('Aucune année scolaire n’est disponible pour une première inscription.');
+        }
+
+        $dejaInscrit = Inscription::query()
+            ->where('eleve_id', $eleve->id)
+            ->where('annee_scolaire_id', $annee->id)
+            ->exists();
+
+        if ($dejaInscrit) {
+            return $this->indisponible('Cet élève possède déjà une inscription pour cette année scolaire.', null, $annee);
+        }
+
+        $demandeEnAttente = DemandeReinscription::query()
+            ->with(['classeDemandee', 'nouvelleAnneeScolaire'])
+            ->where('eleve_id', $eleve->id)
+            ->where('nouvelle_annee_scolaire_id', $annee->id)
+            ->where('statut', DemandeReinscription::STATUT_EN_ATTENTE)
+            ->when($ignorerDemandeId, fn ($query) => $query->where('id', '!=', $ignorerDemandeId))
+            ->latest()
+            ->first();
+
+        if ($demandeEnAttente) {
+            return [
+                'possible' => false,
+                'raison' => 'Une demande d’inscription est déjà en attente pour cet enfant.',
+                'nouvelle_annee' => $annee,
+                'classes_disponibles' => collect(),
+                'type_demande' => DemandeReinscription::TYPE_PREMIERE_INSCRIPTION,
+                'decision_systeme' => DemandeReinscription::DECISION_INSCRIPTION_AUTORISEE,
+                'demande_en_attente' => $demandeEnAttente,
+            ];
+        }
+
+        $classesDisponibles = Classe::query()
+            ->with('anneeScolaire')
+            ->where('annee_scolaire_id', $annee->id)
+            ->orderBy('niveau')
+            ->orderBy('nom')
+            ->get();
+
+        if ($classesDisponibles->isEmpty()) {
+            return $this->indisponible('Aucune classe n’est disponible pour cette année scolaire.', null, $annee);
+        }
+
+        return [
+            'possible' => true,
+            'raison' => null,
+            'bulletin_annuel' => null,
+            'nouvelle_annee' => $annee,
+            'niveau_demande' => null,
+            'classes_disponibles' => $classesDisponibles,
+            'type_demande' => DemandeReinscription::TYPE_PREMIERE_INSCRIPTION,
+            'decision_systeme' => DemandeReinscription::DECISION_INSCRIPTION_AUTORISEE,
+            'demande_en_attente' => null,
+        ];
+    }
+
+    public function verifierClassePremiereInscription(Eleve $eleve, Classe $classe, ?int $ignorerDemandeId = null): array
+    {
+        $classe->loadMissing('anneeScolaire');
+        $option = $this->optionPremiereInscription($eleve, $classe->anneeScolaire, $ignorerDemandeId);
+
+        if (! ($option['possible'] ?? false)) {
+            throw new RuntimeException($option['raison'] ?? 'Première inscription non disponible.');
+        }
+
+        $autorisee = $option['classes_disponibles']
+            ->contains(fn (Classe $classeDisponible) => (int) $classeDisponible->id === (int) $classe->id);
+
+        if (! $autorisee) {
+            throw new RuntimeException('La classe demandée n’est pas disponible pour cette première inscription.');
+        }
+
+        return $option;
+    }
+
+    public function verifierClasseAutorisee(Inscription $inscription, Classe $classe, ?int $ignorerDemandeId = null): array
+    {
+        $option = $this->optionPourInscription($inscription, $ignorerDemandeId);
 
         if (! ($option['possible'] ?? false)) {
             throw new RuntimeException($option['raison'] ?? 'Réinscription non disponible.');
@@ -138,7 +230,7 @@ class ParentReinscriptionService
             ->contains(fn (Classe $classeDisponible) => (int) $classeDisponible->id === (int) $classe->id);
 
         if (! $autorisee) {
-            throw new RuntimeException('La classe demandée ne respecte pas la décision du système.');
+            throw new RuntimeException('La classe demandée n’est pas disponible pour cette demande.');
         }
 
         return $option;

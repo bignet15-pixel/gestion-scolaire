@@ -36,8 +36,10 @@ class EnfantController extends Controller
         $enfantsQuery = $parent->enfants();
 
         if ($anneeSelectionnee) {
-            $enfantsQuery->whereHas('inscriptions', function ($query) use ($anneeSelectionnee) {
-                $query->where('annee_scolaire_id', $anneeSelectionnee->id);
+            $enfantsQuery->where(function ($query) use ($anneeSelectionnee) {
+                $query->whereHas('inscriptions', function ($q) use ($anneeSelectionnee) {
+                    $q->where('annee_scolaire_id', $anneeSelectionnee->id);
+                })->orWhereDoesntHave('inscriptions');
             });
         }
 
@@ -536,7 +538,7 @@ class EnfantController extends Controller
             return $path;
         }
 
-        return url(Storage::url($path));
+        return url('/storage/' . ltrim($path, '/'));
     }
 
     private function success(string $message, array $data = []): JsonResponse

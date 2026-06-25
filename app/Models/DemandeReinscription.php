@@ -12,9 +12,11 @@ class DemandeReinscription extends Model
 
     protected $table = 'demandes_reinscription';
 
+    public const TYPE_PREMIERE_INSCRIPTION = 'premiere_inscription';
     public const TYPE_PASSAGE_SUPERIEUR = 'passage_superieur';
     public const TYPE_REDOUBLEMENT = 'redoublement';
 
+    public const DECISION_INSCRIPTION_AUTORISEE = 'inscription_autorisee';
     public const DECISION_PASSAGE_AUTORISE = 'passage_autorise';
     public const DECISION_REDOUBLEMENT_OBLIGATOIRE = 'redoublement_obligatoire';
     public const DECISION_NON_DISPONIBLE = 'non_disponible';
@@ -25,6 +27,7 @@ class DemandeReinscription extends Model
     public const STATUT_ANNULEE = 'annulee';
 
     public const TYPES = [
+        self::TYPE_PREMIERE_INSCRIPTION,
         self::TYPE_PASSAGE_SUPERIEUR,
         self::TYPE_REDOUBLEMENT,
     ];
@@ -121,6 +124,7 @@ class DemandeReinscription extends Model
     public function libelleTypeDemande(): string
     {
         return match ($this->type_demande) {
+            self::TYPE_PREMIERE_INSCRIPTION => 'Première inscription',
             self::TYPE_REDOUBLEMENT => 'Réinscription dans la même classe',
             default => 'Passage en classe supérieure',
         };
@@ -130,6 +134,7 @@ class DemandeReinscription extends Model
     public function libelleDecisionSysteme(): string
     {
         return match ($this->decision_systeme) {
+            self::DECISION_INSCRIPTION_AUTORISEE => 'Première inscription autorisée',
             self::DECISION_REDOUBLEMENT_OBLIGATOIRE => 'Redoublement obligatoire',
             self::DECISION_PASSAGE_AUTORISE => 'Passage autorisé',
             default => 'Non disponible',

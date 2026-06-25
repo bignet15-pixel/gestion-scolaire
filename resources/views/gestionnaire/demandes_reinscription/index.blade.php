@@ -17,8 +17,8 @@
         <div class="detail-header-card">
             <div>
                 <div class="detail-kicker">Demandes parentales</div>
-                <h1>Réinscriptions</h1>
-                <p>Validation des demandes de passage ou de redoublement faites par les parents.</p>
+                <h1>Inscriptions et réinscriptions</h1>
+                <p>Validation des demandes parentales d’inscription, de passage ou de redoublement.</p>
             </div>
         </div>
 
@@ -69,7 +69,6 @@
                             <th>Élève</th>
                             <th>Ancienne classe</th>
                             <th>Classe demandée</th>
-                            <th>Décision système</th>
                             <th>Statut</th>
                             <th>Action</th>
                         </tr>
@@ -93,7 +92,6 @@
                                     <br>
                                     <small>{{ $demande->nouvelleAnneeScolaire?->libelle ?? '-' }}</small>
                                 </td>
-                                <td>{{ $demande->libelleDecisionSysteme() }}</td>
                                 <td><span class="status-pill status-{{ $demande->statut }}">{{ $demande->libelleStatut() }}</span></td>
                                 <td>
                                     <a href="{{ route('gestionnaire.demandes-reinscription.show', $demande) }}" class="btn btn-primary btn-sm">
@@ -103,7 +101,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7">Aucune demande de réinscription.</td>
+                                <td colspan="6">Aucune demande parentale.</td>
                             </tr>
                         @endforelse
                     </tbody>

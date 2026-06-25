@@ -91,37 +91,55 @@ class GestionnaireDemandeReinscriptionController extends Controller
         abort_unless($demande->estEnAttente(), 422, 'Cette demande est déjà traitée.');
 
         try {
-            $this->reinscriptionService->verifierClasseAutorisee(
-                $demande->ancienneInscription,
-                $demande->classeDemandee
-            );
+            if ($demande->type_demande === DemandeReinscription::TYPE_PREMIERE_INSCRIPTION) {
+                $this->reinscriptionService->verifierClassePremiereInscription(
+                    $demande->eleve,
+                    $demande->classeDemandee,
+                    $demande->id
+                );
+            } else {
+                $this->reinscriptionService->verifierClasseAutorisee(
+                    $demande->ancienneInscription,
+                    $demande->classeDemandee,
+                    $demande->id
+                );
+            }
         } catch (RuntimeException $exception) {
             throw ValidationException::withMessages([
                 'demande' => $exception->getMessage(),
             ]);
         }
 
-        $inscriptionExistante = Inscription::query()
-            ->where('eleve_id', $demande->eleve_id)
-            ->where('annee_scolaire_id', $demande->nouvelle_annee_scolaire_id)
-            ->exists();
-
-        if ($inscriptionExistante) {
-            throw ValidationException::withMessages([
-                'demande' => 'Cet élève possède déjà une inscription pour cette année scolaire.',
-            ]);
-        }
-
         DB::transaction(function () use ($demande, $validated) {
-            $inscription = Inscription::create([
-                'eleve_id' => $demande->eleve_id,
-                'classe_id' => $demande->classe_demandee_id,
-                'annee_scolaire_id' => $demande->nouvelle_annee_scolaire_id,
-                'date_inscription' => now()->toDateString(),
-                'frais_attendu' => $demande->classeDemandee?->frais_scolarite ?? 0,
-                'statut' => 'actif',
-                'is_deleted' => false,
-            ]);
+            $inscription = Inscription::withTrashed()
+                ->where('eleve_id', $demande->eleve_id)
+                ->where('annee_scolaire_id', $demande->nouvelle_annee_scolaire_id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($inscription) {
+                if (method_exists($inscription, 'trashed') && $inscription->trashed()) {
+                    $inscription->restore();
+                }
+
+                $inscription->update([
+                    'classe_id' => $demande->classe_demandee_id,
+                    'date_inscription' => $inscription->date_inscription ?? now()->toDateString(),
+                    'frais_attendu' => $demande->classeDemandee?->frais_scolarite ?? $inscription->frais_attendu ?? 0,
+                    'statut' => 'actif',
+                    'is_deleted' => false,
+                ]);
+            } else {
+                $inscription = Inscription::create([
+                    'eleve_id' => $demande->eleve_id,
+                    'classe_id' => $demande->classe_demandee_id,
+                    'annee_scolaire_id' => $demande->nouvelle_annee_scolaire_id,
+                    'date_inscription' => now()->toDateString(),
+                    'frais_attendu' => $demande->classeDemandee?->frais_scolarite ?? 0,
+                    'statut' => 'actif',
+                    'is_deleted' => false,
+                ]);
+            }
 
             $demande->update([
                 'statut' => DemandeReinscription::STATUT_VALIDEE,

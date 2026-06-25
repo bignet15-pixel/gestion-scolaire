@@ -24,31 +24,36 @@ class ParentDemandeReinscriptionController extends Controller
         $this->parentAccessService->assertCanAccessEleve($parent, $eleve);
 
         $validated = $request->validate([
-            'ancienne_inscription_id' => ['required', 'exists:inscriptions,id'],
+            'ancienne_inscription_id' => ['nullable', 'exists:inscriptions,id'],
             'classe_demandee_id' => ['required', 'exists:classes,id'],
             'commentaire_parent' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $inscription = Inscription::with(['eleve', 'classe', 'anneeScolaire', 'paiements'])
-            ->where('eleve_id', $eleve->id)
-            ->findOrFail($validated['ancienne_inscription_id']);
-
         $classeDemandee = Classe::with('anneeScolaire')
             ->findOrFail($validated['classe_demandee_id']);
+        $inscription = null;
+        $estPremiereInscription = ! Inscription::query()->where('eleve_id', $eleve->id)->exists();
 
         try {
-            $option = $this->reinscriptionService->verifierClasseAutorisee($inscription, $classeDemandee);
+            if ($estPremiereInscription) {
+                $option = $this->reinscriptionService->verifierClassePremiereInscription($eleve, $classeDemandee);
+            } else {
+                $inscription = Inscription::with(['eleve', 'classe', 'anneeScolaire', 'paiements'])
+                    ->where('eleve_id', $eleve->id)
+                    ->findOrFail($validated['ancienne_inscription_id'] ?? null);
+                $option = $this->reinscriptionService->verifierClasseAutorisee($inscription, $classeDemandee);
+            }
         } catch (RuntimeException $exception) {
             return back()->withErrors([
                 'reinscription' => $exception->getMessage(),
             ]);
         }
 
-        DemandeReinscription::create([
+        $demande = DemandeReinscription::create([
             'eleve_id' => $eleve->id,
             'parent_id' => $parent->id,
-            'ancienne_inscription_id' => $inscription->id,
-            'ancienne_classe_id' => $inscription->classe_id,
+            'ancienne_inscription_id' => $inscription?->id,
+            'ancienne_classe_id' => $inscription?->classe_id,
             'nouvelle_annee_scolaire_id' => $option['nouvelle_annee']->id,
             'classe_demandee_id' => $classeDemandee->id,
             'type_demande' => $option['type_demande'],
@@ -57,8 +62,12 @@ class ParentDemandeReinscriptionController extends Controller
             'commentaire_parent' => $validated['commentaire_parent'] ?? null,
         ]);
 
+        $message = ($demande->type_demande === DemandeReinscription::TYPE_PREMIERE_INSCRIPTION)
+            ? 'Demande de première inscription envoyée. Elle attend la validation du gestionnaire.'
+            : 'Demande de réinscription envoyée. Elle attend la validation du gestionnaire.';
+
         return redirect()
             ->route('parent.eleves.show', $eleve)
-            ->with('success', 'Demande de réinscription envoyée. Elle attend la validation du gestionnaire.');
+            ->with('success', $message);
     }
 }
