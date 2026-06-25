@@ -112,8 +112,19 @@ class EnfantController extends Controller
         $parent = $request->user();
         $this->parentAccessService->assertCanAccessEleve($parent, $eleve);
 
+        $validated = $request->validate([
+            'annee_scolaire_id' => ['nullable', 'integer', 'exists:annee_scolaires,id'],
+            'trimestre_id' => ['nullable', 'integer', 'exists:trimestres,id'],
+        ]);
+
         $anneeActive = $this->anneeScolaireCourante();
-        $trimestreActif = $this->trimestreActif($anneeActive);
+        $anneeSelectionnee = $this->resolveAnneeSelectionnee($request, $anneeActive);
+        $trimestreActif = $this->trimestreActif($anneeSelectionnee);
+        $trimestreSelectionne = $this->resolveTrimestreSelectionne(
+            $validated['trimestre_id'] ?? null,
+            $anneeSelectionnee,
+            $trimestreActif
+        );
 
         $eleve->load([
             'parents:id,nom,prenom,email,phone',
@@ -123,25 +134,31 @@ class EnfantController extends Controller
             },
         ]);
 
-        $inscription = $this->inscriptionReference($eleve, $anneeActive);
+        $inscription = $this->inscriptionReference($eleve, $anneeSelectionnee);
 
         if (! $inscription) {
             return $this->success('Dashboard enfant récupéré avec succès.', [
                 'eleve' => $this->formatEleve($eleve),
                 'annee_active' => $this->formatAnnee($anneeActive),
+                'annee_selectionnee' => $this->formatAnnee($anneeSelectionnee),
                 'trimestre_actif' => $this->formatTrimestre($trimestreActif),
+                'trimestre_selectionne' => $this->formatTrimestre($trimestreSelectionne),
                 'inscription' => null,
-                'message' => 'Aucune inscription trouvée pour cet enfant.',
+                'message' => 'Aucune inscription trouvée pour cet enfant sur cette année scolaire.',
             ]);
         }
 
-        $inscriptionIds = $eleve->inscriptions->pluck('id');
-        $trimestreReference = $this->trimestreResultatReference($inscription, $anneeActive, $trimestreActif);
+        $inscriptionIds = collect([$inscription->id]);
+        $trimestreReference = $trimestreSelectionne
+            ?: $this->trimestreResultatReference($inscription, $anneeSelectionnee, $trimestreActif);
 
         $notesRecentes = Note::with(['evaluation.matiere', 'evaluation.trimestre'])
             ->whereIn('inscription_id', $inscriptionIds)
             ->whereNotNull('valeur')
             ->whereHas('evaluation')
+            ->when($trimestreSelectionne, function ($query) use ($trimestreSelectionne) {
+                $query->whereHas('evaluation', fn ($q) => $q->where('trimestre_id', $trimestreSelectionne->id));
+            })
             ->orderByDesc(
                 \App\Models\Evaluation::select('date_evaluation')
                     ->whereColumn('evaluations.id', 'notes.evaluation_id')
@@ -172,6 +189,7 @@ class EnfantController extends Controller
         $sanctions = SanctionAppliquee::with(['sanction', 'trimestre'])
             ->where('inscription_id', $inscription->id)
             ->where('visible_parent', true)
+            ->when($trimestreSelectionne, fn ($query) => $query->where('trimestre_id', $trimestreSelectionne->id))
             ->orderByDesc('created_at')
             ->limit(8)
             ->get();
@@ -179,7 +197,9 @@ class EnfantController extends Controller
         return $this->success('Dashboard enfant récupéré avec succès.', [
             'eleve' => $this->formatEleve($eleve),
             'annee_active' => $this->formatAnnee($anneeActive),
+            'annee_selectionnee' => $this->formatAnnee($anneeSelectionnee),
             'trimestre_actif' => $this->formatTrimestre($trimestreActif),
+            'trimestre_selectionne' => $this->formatTrimestre($trimestreSelectionne),
             'inscription' => $this->formatInscription($inscription),
             'situation_financiere' => $this->formatSituationFinanciere($inscription),
             'resultat_reference' => $this->formatResultatReference($inscription, $trimestreReference),
@@ -200,6 +220,18 @@ class EnfantController extends Controller
         }
 
         return $anneeActive;
+    }
+
+    private function resolveTrimestreSelectionne(?int $trimestreId, ?AnneeScolaire $annee, ?Trimestre $trimestreActif): ?Trimestre
+    {
+        if ($trimestreId) {
+            return Trimestre::query()
+                ->when($annee, fn ($query) => $query->where('annee_scolaire_id', $annee->id))
+                ->find($trimestreId)
+                ?? $trimestreActif;
+        }
+
+        return $trimestreActif;
     }
 
     private function formatEnfantResume(Eleve $eleve): array
