@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\AbsenceRetard;
 use App\Models\AnneeScolaire;
 use App\Models\Classe;
+use App\Models\ClasseMatiereUser;
 use App\Models\DemandeReinscription;
 use App\Models\Eleve;
 use App\Models\Inscription;
 use App\Models\JustificationAbsenceRetard;
+use App\Models\Matiere;
 use App\Models\Note;
 use App\Models\Paiement;
 use App\Models\PaiementDeclare;
@@ -37,6 +39,121 @@ class EnfantDetailController extends Controller
         private BulletinService $bulletinService,
         private ParentReinscriptionService $reinscriptionService
     ) {}
+
+    public function filtres(Request $request, Eleve $eleve): JsonResponse
+    {
+        $this->assertParentCanAccessEleve($request, $eleve);
+
+        $inscriptions = Inscription::with(['classe.anneeScolaire', 'anneeScolaire'])
+            ->where('eleve_id', $eleve->id)
+            ->orderByDesc('date_inscription')
+            ->get();
+
+        $anneeActive = $this->anneeScolaireCourante();
+        $annees = $inscriptions
+            ->pluck('anneeScolaire')
+            ->filter()
+            ->unique('id')
+            ->sortByDesc(fn (AnneeScolaire $annee) => $annee->date_debut?->timestamp ?? $annee->id)
+            ->values();
+
+        $anneeParDefaut = $annees->firstWhere('id', $anneeActive?->id) ?? $annees->first();
+        $anneeIds = $annees->pluck('id')->filter()->values();
+        $inscriptionIds = $inscriptions->pluck('id')->filter()->values();
+        $classeIds = $inscriptions->pluck('classe_id')->filter()->unique()->values();
+
+        $trimestres = Trimestre::query()
+            ->whereIn('annee_scolaire_id', $anneeIds)
+            ->orderBy('annee_scolaire_id')
+            ->orderBy('date_debut')
+            ->get()
+            ->map(fn (Trimestre $trimestre) => array_merge(
+                $this->formatTrimestre($trimestre),
+                ['annee_scolaire_id' => $trimestre->annee_scolaire_id]
+            ))
+            ->values();
+
+        $matieresDepuisNotes = Note::with('evaluation.matiere')
+            ->whereIn('inscription_id', $inscriptionIds)
+            ->get()
+            ->pluck('evaluation.matiere')
+            ->filter();
+
+        $matieresDepuisClasses = ClasseMatiereUser::with('matiere')
+            ->whereIn('classe_id', $classeIds)
+            ->get()
+            ->pluck('matiere')
+            ->filter();
+
+        $matieres = $matieresDepuisNotes
+            ->concat($matieresDepuisClasses)
+            ->filter()
+            ->unique('id')
+            ->sortBy('nom')
+            ->values()
+            ->map(fn (Matiere $matiere) => $this->formatMatiere($matiere));
+
+        return $this->success('Filtres historiques récupérés avec succès.', [
+            'eleve' => $this->formatEleveSimple($eleve),
+            'annee_active' => $this->formatAnnee($anneeActive),
+            'annee_par_defaut' => $this->formatAnnee($anneeParDefaut),
+            'inscription_reference' => $this->formatInscriptionSimple(
+                $inscriptions->firstWhere('annee_scolaire_id', $anneeParDefaut?->id) ?? $inscriptions->first()
+            ),
+            'inscriptions' => $inscriptions
+                ->map(fn (Inscription $inscription) => $this->formatInscriptionSimple($inscription))
+                ->values(),
+            'annees_scolaires' => $annees
+                ->map(fn (AnneeScolaire $annee) => array_merge(
+                    $this->formatAnnee($annee),
+                    [
+                        'active' => $anneeActive?->id === $annee->id,
+                        'selectionnee_par_defaut' => $anneeParDefaut?->id === $annee->id,
+                    ]
+                ))
+                ->values(),
+            'trimestres' => $trimestres,
+            'matieres' => $matieres,
+            'statuts' => [
+                'paiements_declares' => $this->formatOptions(PaiementDeclare::STATUTS, [
+                    PaiementDeclare::STATUT_EN_ATTENTE => 'En attente',
+                    PaiementDeclare::STATUT_VALIDE => 'Validé',
+                    PaiementDeclare::STATUT_REFUSE => 'Refusé',
+                ]),
+                'absences_retards' => $this->formatOptions(AbsenceRetard::STATUTS, [
+                    'en_attente' => 'En attente',
+                    'justifiee' => 'Justifiée',
+                    'non_justifiee' => 'Non justifiée',
+                    'refusee' => 'Refusée',
+                ]),
+                'sanctions' => $this->formatOptions(SanctionAppliquee::STATUTS, [
+                    'proposee' => 'Proposée',
+                    'appliquee' => 'En cours',
+                    'terminee' => 'Définitive',
+                    'annulee' => 'Annulée',
+                    'ignoree' => 'Ignorée',
+                ]),
+                'demandes_reinscription' => $this->formatOptions(DemandeReinscription::STATUTS, [
+                    DemandeReinscription::STATUT_EN_ATTENTE => 'En attente',
+                    DemandeReinscription::STATUT_VALIDEE => 'Validée',
+                    DemandeReinscription::STATUT_REFUSEE => 'Refusée',
+                    DemandeReinscription::STATUT_ANNULEE => 'Annulée',
+                ]),
+            ],
+            'types' => [
+                'absences_retards' => $this->formatOptions(AbsenceRetard::TYPES, [
+                    'absence' => 'Absence',
+                    'retard' => 'Retard',
+                ]),
+                'paiements_declares_modes' => $this->formatOptions(PaiementDeclare::MODES_PAIEMENT, [
+                    'especes' => 'Espèces',
+                    'mobile_money' => 'Mobile money',
+                    'virement' => 'Virement',
+                    'autre' => 'Autre',
+                ]),
+            ],
+        ]);
+    }
 
     public function notes(Request $request, Eleve $eleve): JsonResponse
     {
@@ -1029,6 +1146,29 @@ class EnfantDetailController extends Controller
             'statut' => $trimestre->statut,
             'statut_pedagogique' => $trimestre->statutPedagogique(),
         ];
+    }
+
+    private function formatMatiere(?Matiere $matiere): ?array
+    {
+        if (! $matiere) {
+            return null;
+        }
+
+        return [
+            'id' => $matiere->id,
+            'nom' => $matiere->nom,
+        ];
+    }
+
+    private function formatOptions(array $values, array $labels = []): array
+    {
+        return collect($values)
+            ->map(fn (string $value) => [
+                'value' => $value,
+                'label' => $labels[$value] ?? ucfirst(str_replace('_', ' ', $value)),
+            ])
+            ->values()
+            ->all();
     }
 
     private function formatUserSimple($user): ?array

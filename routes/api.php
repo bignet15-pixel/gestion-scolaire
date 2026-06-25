@@ -21,6 +21,7 @@ Route::prefix('parent')->name('api.parent.')->group(function () {
 
         Route::get('/enfants', [EnfantController::class, 'index'])->name('enfants.index');
         Route::get('/enfants/{eleve}/dashboard', [EnfantController::class, 'dashboard'])->name('enfants.dashboard');
+        Route::get('/enfants/{eleve}/filtres', [EnfantDetailController::class, 'filtres'])->name('enfants.filtres');
 
         Route::get('/enfants/{eleve}/notes', [EnfantDetailController::class, 'notes'])->name('enfants.notes');
         Route::get('/enfants/{eleve}/resultats', [EnfantDetailController::class, 'resultats'])->name('enfants.resultats');
