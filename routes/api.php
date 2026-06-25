@@ -19,6 +19,7 @@ Route::prefix('parent')->name('api.parent.')->group(function () {
         Route::put('/me', [AuthController::class, 'updateProfile'])->name('me.update');
         Route::put('/password', [AuthController::class, 'updatePassword'])->name('password.update');
 
+        Route::get('/filtres', [EnfantController::class, 'filtres'])->name('filtres');
         Route::get('/enfants', [EnfantController::class, 'index'])->name('enfants.index');
         Route::get('/enfants/{eleve}/dashboard', [EnfantController::class, 'dashboard'])->name('enfants.dashboard');
         Route::get('/enfants/{eleve}/filtres', [EnfantDetailController::class, 'filtres'])->name('enfants.filtres');

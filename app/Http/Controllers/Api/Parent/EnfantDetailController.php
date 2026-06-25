@@ -50,12 +50,10 @@ class EnfantDetailController extends Controller
             ->get();
 
         $anneeActive = $this->anneeScolaireCourante();
-        $annees = $inscriptions
-            ->pluck('anneeScolaire')
-            ->filter()
-            ->unique('id')
-            ->sortByDesc(fn (AnneeScolaire $annee) => $annee->date_debut?->timestamp ?? $annee->id)
-            ->values();
+        $annees = AnneeScolaire::query()
+            ->orderByDesc('date_debut')
+            ->orderByDesc('id')
+            ->get();
 
         $anneeParDefaut = $annees->firstWhere('id', $anneeActive?->id) ?? $annees->first();
         $anneeIds = $annees->pluck('id')->filter()->values();

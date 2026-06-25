@@ -31,12 +31,21 @@ class EnfantController extends Controller
     {
         $parent = $request->user();
         $anneeActive = $this->anneeScolaireCourante();
+        $anneeSelectionnee = $this->resolveAnneeSelectionnee($request, $anneeActive);
 
-        $enfants = $parent->enfants()
+        $enfantsQuery = $parent->enfants();
+
+        if ($anneeSelectionnee) {
+            $enfantsQuery->whereHas('inscriptions', function ($query) use ($anneeSelectionnee) {
+                $query->where('annee_scolaire_id', $anneeSelectionnee->id);
+            });
+        }
+
+        $enfants = $enfantsQuery
             ->with([
-                'inscriptions' => function ($query) use ($anneeActive) {
+                'inscriptions' => function ($query) use ($anneeSelectionnee) {
                     $query->with(['classe.anneeScolaire', 'anneeScolaire', 'paiements'])
-                        ->when($anneeActive, fn ($q) => $q->where('annee_scolaire_id', $anneeActive->id))
+                        ->when($anneeSelectionnee, fn ($q) => $q->where('annee_scolaire_id', $anneeSelectionnee->id))
                         ->orderByDesc('date_inscription');
                 },
             ])
@@ -46,8 +55,55 @@ class EnfantController extends Controller
 
         return $this->success('Liste des enfants récupérée avec succès.', [
             'annee_active' => $this->formatAnnee($anneeActive),
+            'annee_selectionnee' => $this->formatAnnee($anneeSelectionnee),
             'total' => $enfants->count(),
             'enfants' => $enfants->map(fn (Eleve $eleve) => $this->formatEnfantResume($eleve))->values(),
+        ]);
+    }
+
+    public function filtres(Request $request): JsonResponse
+    {
+        $parent = $request->user();
+        $anneeActive = $this->anneeScolaireCourante();
+
+        $annees = AnneeScolaire::query()
+            ->orderByDesc('date_debut')
+            ->orderByDesc('id')
+            ->get();
+
+        $anneeParDefaut = $annees->firstWhere('id', $anneeActive?->id) ?? $annees->first();
+
+        $enfantIdsParAnnee = [];
+        $eleveIds = $parent->enfants()->pluck('eleves.id');
+
+        Inscription::query()
+            ->whereIn('eleve_id', $eleveIds)
+            ->select(['eleve_id', 'annee_scolaire_id'])
+            ->get()
+            ->each(function (Inscription $inscription) use (&$enfantIdsParAnnee) {
+                if (! $inscription->annee_scolaire_id) {
+                    return;
+                }
+
+                $key = (string) $inscription->annee_scolaire_id;
+                $enfantIdsParAnnee[$key] ??= [];
+                $enfantIdsParAnnee[$key][] = $inscription->eleve_id;
+                $enfantIdsParAnnee[$key] = array_values(array_unique($enfantIdsParAnnee[$key]));
+            });
+
+        return $this->success('Filtres parent récupérés avec succès.', [
+            'annee_active' => $this->formatAnnee($anneeActive),
+            'annee_par_defaut' => $this->formatAnnee($anneeParDefaut),
+            'annees_scolaires' => $annees
+                ->map(fn (AnneeScolaire $annee) => array_merge(
+                    $this->formatAnnee($annee),
+                    [
+                        'active' => $anneeActive?->id === $annee->id,
+                        'selectionnee_par_defaut' => $anneeParDefaut?->id === $annee->id,
+                        'enfant_ids' => $enfantIdsParAnnee[(string) $annee->id] ?? [],
+                    ]
+                ))
+                ->values(),
         ]);
     }
 
@@ -133,6 +189,17 @@ class EnfantController extends Controller
             'absences_retards_recents' => $absencesRetards->map(fn (AbsenceRetard $absenceRetard) => $this->formatAbsenceRetard($absenceRetard))->values(),
             'sanctions_recentes' => $sanctions->map(fn (SanctionAppliquee $sanction) => $this->formatSanction($sanction))->values(),
         ]);
+    }
+
+    private function resolveAnneeSelectionnee(Request $request, ?AnneeScolaire $anneeActive): ?AnneeScolaire
+    {
+        $anneeId = $request->integer('annee_scolaire_id');
+
+        if ($anneeId > 0) {
+            return AnneeScolaire::find($anneeId) ?? $anneeActive;
+        }
+
+        return $anneeActive;
     }
 
     private function formatEnfantResume(Eleve $eleve): array
