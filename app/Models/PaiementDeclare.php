@@ -34,6 +34,7 @@ class PaiementDeclare extends Model
         'parent_id',
         'montant',
         'mode_paiement',
+        'numero_transfert',
         'reference_transaction',
         'preuve_paiement',
         'statut',

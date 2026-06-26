@@ -95,7 +95,7 @@ class GestionnairePaiementDeclareController extends Controller
                 'mode_paiement' => in_array($paiementDeclare->mode_paiement, ['especes', 'mobile_money', 'virement', 'autre'], true)
                     ? $paiementDeclare->mode_paiement
                     : 'autre',
-                'contact_parent' => $paiementDeclare->inscription->eleve?->contact_parent,
+                'contact_parent' => $paiementDeclare->numero_transfert ?: $paiementDeclare->inscription->eleve?->contact_parent,
                 'contact_gestionnaire' => auth()->user()?->phone,
             ]);
 

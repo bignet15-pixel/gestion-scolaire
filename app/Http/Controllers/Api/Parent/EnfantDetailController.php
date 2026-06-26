@@ -407,7 +407,8 @@ class EnfantDetailController extends Controller
             'inscription_id' => ['nullable', 'integer', 'exists:inscriptions,id'],
             'montant' => ['required', 'numeric', 'min:1'],
             'mode_paiement' => ['required', Rule::in(PaiementDeclare::MODES_PAIEMENT)],
-            'reference_transaction' => ['nullable', 'string', 'max:190'],
+            'numero_transfert' => [Rule::requiredIf(fn () => $request->input('mode_paiement') !== 'especes'), 'nullable', 'string', 'max:50'],
+            'reference_transaction' => [Rule::requiredIf(fn () => $request->input('mode_paiement') !== 'especes'), 'nullable', 'string', 'max:190'],
             'preuve_paiement' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
@@ -438,6 +439,7 @@ class EnfantDetailController extends Controller
             'parent_id' => $request->user()->id,
             'montant' => $validated['montant'],
             'mode_paiement' => $validated['mode_paiement'],
+            'numero_transfert' => $validated['numero_transfert'] ?? null,
             'reference_transaction' => $validated['reference_transaction'] ?? null,
             'preuve_paiement' => $preuvePaiement,
             'statut' => PaiementDeclare::STATUT_EN_ATTENTE,
@@ -933,6 +935,7 @@ class EnfantDetailController extends Controller
             'id' => $paiementDeclare->id,
             'montant' => (float) $paiementDeclare->montant,
             'mode_paiement' => $paiementDeclare->mode_paiement,
+            'numero_transfert' => $paiementDeclare->numero_transfert,
             'reference_transaction' => $paiementDeclare->reference_transaction,
             'statut' => $paiementDeclare->statut,
             'libelle_statut' => $paiementDeclare->libelleStatut(),

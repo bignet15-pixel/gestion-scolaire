@@ -55,6 +55,10 @@
                         <p>{{ str_replace('_', ' ', $paiementDeclare->mode_paiement) }}</p>
                     </div>
                     <div>
+                        <strong>Numéro utilisé</strong>
+                        <p>{{ $paiementDeclare->numero_transfert ?? '-' }}</p>
+                    </div>
+                    <div>
                         <strong>Référence</strong>
                         <p>{{ $paiementDeclare->reference_transaction ?? '-' }}</p>
                     </div>

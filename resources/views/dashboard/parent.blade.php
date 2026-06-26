@@ -91,7 +91,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7">Aucun élève n’est lié à votre compte.</td>
+                                <td colspan="8">Aucun élève n’est lié à votre compte.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -137,7 +137,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7">Aucune absence ou retard visible.</td>
+                                <td colspan="8">Aucune absence ou retard visible.</td>
                             </tr>
                         @endforelse
                     </tbody>

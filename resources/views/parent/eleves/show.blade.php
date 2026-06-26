@@ -332,8 +332,15 @@
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label">Numéro utilisé</label>
+                        <input type="text" name="numero_transfert" class="form-control" placeholder="Téléphone Mobile Money ou numéro de virement">
+                        <small>Obligatoire pour Mobile money, Virement et Autre. Facultatif pour Espèces.</small>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label">Référence transaction</label>
                         <input type="text" name="reference_transaction" class="form-control" placeholder="Ex : OM-123456">
+                        <small>Obligatoire sauf pour un paiement en espèces.</small>
                     </div>
 
                     <div class="form-group">
@@ -359,7 +366,8 @@
                             <th>Date</th>
                             <th>Montant</th>
                             <th>Mode</th>
-                            <th>Référence</th>
+                            <th>Numéro utilisé</th>
+                                <th>Référence</th>
                             <th>Statut</th>
                             <th>Preuve</th>
                         </tr>
@@ -370,6 +378,7 @@
                                 <td>{{ $paiementDeclare->created_at?->format('d/m/Y H:i') }}</td>
                                 <td>{{ number_format($paiementDeclare->montant, 0, ',', ' ') }} FCFA</td>
                                 <td>{{ str_replace('_', ' ', $paiementDeclare->mode_paiement) }}</td>
+                                <td>{{ $paiementDeclare->numero_transfert ?? '-' }}</td>
                                 <td>{{ $paiementDeclare->reference_transaction ?? '-' }}</td>
                                 <td>{{ $paiementDeclare->libelleStatut() }}</td>
                                 <td>

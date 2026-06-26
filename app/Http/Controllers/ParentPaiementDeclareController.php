@@ -61,7 +61,8 @@ class ParentPaiementDeclareController extends Controller
         $validated = $request->validate([
             'montant' => ['required', 'numeric', 'min:1'],
             'mode_paiement' => ['required', Rule::in(PaiementDeclare::MODES_PAIEMENT)],
-            'reference_transaction' => ['nullable', 'string', 'max:190'],
+            'numero_transfert' => [Rule::requiredIf(fn () => $request->input('mode_paiement') !== 'especes'), 'nullable', 'string', 'max:50'],
+            'reference_transaction' => [Rule::requiredIf(fn () => $request->input('mode_paiement') !== 'especes'), 'nullable', 'string', 'max:190'],
             'preuve_paiement' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
@@ -89,6 +90,7 @@ class ParentPaiementDeclareController extends Controller
             'parent_id' => $parent->id,
             'montant' => $validated['montant'],
             'mode_paiement' => $validated['mode_paiement'],
+            'numero_transfert' => $validated['numero_transfert'] ?? null,
             'reference_transaction' => $validated['reference_transaction'] ?? null,
             'preuve_paiement' => $validated['preuve_paiement'] ?? null,
             'statut' => PaiementDeclare::STATUT_EN_ATTENTE,

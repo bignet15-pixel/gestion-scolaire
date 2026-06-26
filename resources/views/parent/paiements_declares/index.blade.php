@@ -54,7 +54,8 @@
                             <th>Classe</th>
                             <th>Montant</th>
                             <th>Mode</th>
-                            <th>Référence</th>
+                            <th>Numéro utilisé</th>
+                                <th>Référence</th>
                             <th>Statut</th>
                             <th>Preuve</th>
                         </tr>
@@ -71,6 +72,7 @@
                                 </td>
                                 <td>{{ number_format($paiementDeclare->montant, 0, ',', ' ') }} FCFA</td>
                                 <td>{{ str_replace('_', ' ', $paiementDeclare->mode_paiement) }}</td>
+                                <td>{{ $paiementDeclare->numero_transfert ?? '-' }}</td>
                                 <td>{{ $paiementDeclare->reference_transaction ?? '-' }}</td>
                                 <td>{{ $paiementDeclare->libelleStatut() }}</td>
                                 <td>
@@ -83,7 +85,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8">Aucun paiement déclaré.</td>
+                                <td colspan="9">Aucun paiement déclaré.</td>
                             </tr>
                         @endforelse
                     </tbody>

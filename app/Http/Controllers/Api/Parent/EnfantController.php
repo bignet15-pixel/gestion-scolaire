@@ -387,6 +387,7 @@ class EnfantController extends Controller
             'id' => $paiementDeclare->id,
             'montant' => (float) $paiementDeclare->montant,
             'mode_paiement' => $paiementDeclare->mode_paiement,
+            'numero_transfert' => $paiementDeclare->numero_transfert,
             'reference_transaction' => $paiementDeclare->reference_transaction,
             'statut' => $paiementDeclare->statut,
             'libelle_statut' => method_exists($paiementDeclare, 'libelleStatut') ? $paiementDeclare->libelleStatut() : $paiementDeclare->statut,
