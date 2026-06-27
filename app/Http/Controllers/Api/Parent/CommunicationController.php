@@ -16,27 +16,38 @@ class CommunicationController extends Controller
         $validated = $request->validate([
             'type' => ['nullable', 'string', Rule::in(array_keys(Annonce::TYPES))],
             'priorite' => ['nullable', 'string', Rule::in(array_keys(Annonce::PRIORITES))],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
+
+        $limit = $validated['limit'] ?? 50;
 
         $notifications = $request->user()
             ->notificationsUtilisateur()
             ->where('type', 'annonce')
             ->where('source_type', Annonce::class)
-            ->get()
-            ->keyBy('source_id');
-
-        $annonces = Annonce::with(['auteur', 'classe'])
-            ->whereIn('id', $notifications->keys())
-            ->where('est_publiee', true)
-            ->where(function ($query) {
-                $query->whereNull('date_expiration')
-                    ->orWhere('date_expiration', '>=', now());
+            ->whereHasMorph('source', [Annonce::class], function ($query) use ($validated) {
+                $query->where('est_publiee', true)
+                    ->where(function ($q) {
+                        $q->whereNull('date_expiration')
+                            ->orWhere('date_expiration', '>=', now());
+                    })
+                    ->when($validated['type'] ?? null, fn ($q, $type) => $q->where('type', $type))
+                    ->when($validated['priorite'] ?? null, fn ($q, $priorite) => $q->where('priorite', $priorite));
             })
-            ->when($validated['type'] ?? null, fn ($query, $type) => $query->where('type', $type))
-            ->when($validated['priorite'] ?? null, fn ($query, $priorite) => $query->where('priorite', $priorite))
-            ->latest('date_publication')
-            ->get()
-            ->map(fn (Annonce $annonce) => $this->formatAnnonce($annonce, $notifications->get($annonce->id)));
+            ->latest()
+            ->limit($limit)
+            ->get();
+
+        $notifications->loadMorph('source', [
+            Annonce::class => ['auteur', 'classe'],
+        ]);
+
+        $annonces = $notifications
+            ->map(fn (NotificationUtilisateur $notification) => $notification->source instanceof Annonce
+                ? $this->formatAnnonce($notification->source, $notification)
+                : null)
+            ->filter()
+            ->values();
 
         return $this->success('Annonces récupérées avec succès.', [
             'total' => $annonces->count(),

@@ -4132,3 +4132,199 @@ body.modal-open {
         white-space: normal;
     }
 }
+/* ==========================================================
+   Communication — annonces, annonces reçues, notifications
+   ========================================================== */
+.communication-page .communication-hero {
+    overflow: hidden;
+    position: relative;
+}
+
+.communication-page .communication-hero::after {
+    content: "";
+    position: absolute;
+    right: -70px;
+    top: -70px;
+    width: 190px;
+    height: 190px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.10);
+}
+
+.communication-filter-card {
+    padding-bottom: 4px;
+}
+
+.communication-filter-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+    margin-bottom: 0;
+}
+
+.communication-filter-actions {
+    align-items: end;
+    padding-bottom: 16px;
+}
+
+.communication-table-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.communication-table-card .communication-card-title {
+    padding: 22px 22px 0;
+}
+
+.communication-card-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.communication-card-title h2 {
+    margin: 0 0 5px;
+}
+
+.communication-card-title p,
+.communication-muted {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.communication-table {
+    border-radius: 0;
+}
+
+.communication-count {
+    display: inline-flex;
+    min-width: 34px;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: 900;
+}
+
+.communication-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 22px;
+}
+
+.communication-stats-grid .stat-value {
+    font-size: 24px;
+}
+
+.communication-detail-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 22px;
+    align-items: start;
+}
+
+.communication-article-card,
+.communication-side-card,
+.communication-received-card,
+.communication-notification-card {
+    border-radius: 18px;
+}
+
+.communication-content-box {
+    padding: 18px;
+    border: 1px solid #dbeafe;
+    border-radius: 16px;
+    background: #f8fbff;
+    color: #1f2937;
+    line-height: 1.8;
+    overflow-wrap: anywhere;
+}
+
+.communication-detail-list {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+}
+
+.communication-detail-list div {
+    padding: 13px 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #f8fafc;
+}
+
+.communication-detail-list dt {
+    margin-bottom: 5px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.communication-detail-list dd {
+    margin: 0;
+    color: var(--primary-dark);
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+.communication-list {
+    margin-bottom: 20px;
+}
+
+.communication-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.communication-received-card {
+    border-left: 5px solid var(--primary);
+}
+
+.communication-received-card p,
+.communication-notification-card p {
+    color: #4b5563;
+    line-height: 1.65;
+}
+
+.communication-notification-card {
+    border-left-width: 5px;
+}
+
+.empty-state {
+    color: var(--muted);
+    font-weight: 700;
+    text-align: center;
+    padding: 18px;
+}
+
+@media (max-width: 1100px) {
+    .communication-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .communication-detail-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .communication-filter-form {
+        grid-template-columns: 1fr;
+    }
+
+    .communication-card-head,
+    .communication-card-title {
+        flex-direction: column;
+    }
+
+    .communication-stats-grid {
+        grid-template-columns: 1fr;
+    }
+}

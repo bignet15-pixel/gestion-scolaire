@@ -1,16 +1,16 @@
 <x-app-layout>
-    <div class="container">
+    <div class="container communication-page">
         @if (session('success'))
             <div class="alert alert-success">{{ session('success') }}</div>
         @endif
 
-        <div class="detail-header-card">
+        <div class="detail-header-card communication-hero">
             <div>
                 <div class="detail-kicker">Communication</div>
                 <h1>Annonces de l’école</h1>
                 <p>
-                    Créez les annonces officielles. À la publication, le contenu complet est envoyé par email
-                    aux destinataires et une notification est créée dans leur espace.
+                    Créez et publiez les annonces officielles. Les destinataires reçoivent une notification
+                    dans leur espace et les emails sont placés dans la file d’attente.
                 </p>
             </div>
 
@@ -19,8 +19,8 @@
             </div>
         </div>
 
-        <div class="card">
-            <form method="GET" action="{{ route('annonces.index') }}" class="filter-form">
+        <div class="card communication-filter-card">
+            <form method="GET" action="{{ route('annonces.index') }}" class="filter-form communication-filter-form">
                 <div class="form-group">
                     <label for="statut">Statut</label>
                     <select name="statut" id="statut" class="form-control">
@@ -40,14 +40,23 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn">Filtrer</button>
-                <a href="{{ route('annonces.index') }}" class="btn">Réinitialiser</a>
+                <div class="filter-actions communication-filter-actions">
+                    <button type="submit" class="btn btn-primary">Filtrer</button>
+                    <a href="{{ route('annonces.index') }}" class="btn">Réinitialiser</a>
+                </div>
             </form>
         </div>
 
-        <div class="card">
+        <div class="card communication-table-card">
+            <div class="communication-card-title">
+                <div>
+                    <h2>Liste des annonces</h2>
+                    <p>Suivi des brouillons, publications et notifications créées.</p>
+                </div>
+            </div>
+
             <div class="table-responsive">
-                <table class="table">
+                <table class="table communication-table">
                     <thead>
                         <tr>
                             <th>Titre</th>
@@ -65,7 +74,7 @@
                                 <td>
                                     <strong>{{ $annonce->titre }}</strong>
                                     <br>
-                                    <small>{{ $annonce->libellePriorite() }}</small>
+                                    <span class="communication-muted">{{ $annonce->libellePriorite() }}</span>
                                 </td>
                                 <td>{{ $annonce->libelleType() }}</td>
                                 <td>{{ $annonce->libelleCible() }}</td>
@@ -74,20 +83,24 @@
                                         {{ $annonce->est_publiee ? 'Publiée' : 'Brouillon' }}
                                     </span>
                                 </td>
-                                <td>{{ $annonce->notifications_count }}</td>
+                                <td>
+                                    <span class="communication-count">{{ $annonce->notifications_count }}</span>
+                                </td>
                                 <td>
                                     {{ $annonce->date_publication?->format('d/m/Y H:i') ?? $annonce->created_at?->format('d/m/Y H:i') }}
                                 </td>
                                 <td>
-                                    <div class="request-row-actions">
-                                        <a href="{{ route('annonces.show', $annonce) }}" class="btn">Voir</a>
+                                    <div class="table-actions">
+                                        <a href="{{ route('annonces.show', $annonce) }}" class="btn btn-primary">Voir</a>
                                         <a href="{{ route('annonces.edit', $annonce) }}" class="btn">Modifier</a>
                                     </div>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7">Aucune annonce enregistrée.</td>
+                                <td colspan="7">
+                                    <div class="empty-state">Aucune annonce enregistrée.</div>
+                                </td>
                             </tr>
                         @endforelse
                     </tbody>

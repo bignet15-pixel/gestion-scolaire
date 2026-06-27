@@ -8,21 +8,26 @@ class AnnonceEcoleController extends Controller
 {
     public function index()
     {
-        $annonceIds = auth()->user()
-            ->notificationsUtilisateur()
-            ->where('type', 'annonce')
-            ->where('source_type', Annonce::class)
-            ->pluck('source_id');
+        $userId = auth()->id();
 
         $annonces = Annonce::with(['auteur', 'classe'])
-            ->whereIn('id', $annonceIds)
             ->where('est_publiee', true)
             ->where(function ($query) {
                 $query->whereNull('date_expiration')
                     ->orWhere('date_expiration', '>=', now());
             })
+            ->whereExists(function ($query) use ($userId) {
+                $query->selectRaw('1')
+                    ->from('notifications_utilisateurs')
+                    ->whereColumn('notifications_utilisateurs.source_id', 'annonces.id')
+                    ->where('notifications_utilisateurs.source_type', Annonce::class)
+                    ->where('notifications_utilisateurs.type', 'annonce')
+                    ->where('notifications_utilisateurs.user_id', $userId)
+                    ->whereNull('notifications_utilisateurs.deleted_at');
+            })
             ->latest('date_publication')
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString();
 
         return view('annonces_ecole.index', compact('annonces'));
     }

@@ -1,10 +1,10 @@
 <x-app-layout>
-    <div class="container">
+    <div class="container communication-page">
         @if (session('success'))
             <div class="alert alert-success">{{ session('success') }}</div>
         @endif
 
-        <div class="detail-header-card">
+        <div class="detail-header-card communication-hero">
             <div>
                 <div class="detail-kicker">Notifications</div>
                 <h1>Mes notifications</h1>
@@ -19,8 +19,8 @@
             </div>
         </div>
 
-        <div class="card">
-            <form method="GET" action="{{ route('notifications.index') }}" class="filter-form">
+        <div class="card communication-filter-card">
+            <form method="GET" action="{{ route('notifications.index') }}" class="filter-form communication-filter-form">
                 <div class="form-group">
                     <label for="statut">Statut</label>
                     <select name="statut" id="statut" class="form-control">
@@ -40,14 +40,16 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn">Filtrer</button>
-                <a href="{{ route('notifications.index') }}" class="btn">Réinitialiser</a>
+                <div class="filter-actions communication-filter-actions">
+                    <button type="submit" class="btn btn-primary">Filtrer</button>
+                    <a href="{{ route('notifications.index') }}" class="btn">Réinitialiser</a>
+                </div>
             </form>
         </div>
 
-        <div class="notification-list">
+        <div class="notification-list communication-list">
             @forelse ($notifications as $notification)
-                <div class="notification-item {{ $notification->lue ? '' : 'notification-item-unread' }}">
+                <div class="notification-item communication-notification-card {{ $notification->lue ? '' : 'notification-item-unread' }}">
                     <div>
                         <div class="notification-meta">
                             {{ $notification->libelleType() }} · {{ $notification->created_at?->format('d/m/Y H:i') }}
@@ -64,7 +66,7 @@
                     </div>
                 </div>
             @empty
-                <div class="card">
+                <div class="card empty-state">
                     Aucune notification trouvée.
                 </div>
             @endforelse

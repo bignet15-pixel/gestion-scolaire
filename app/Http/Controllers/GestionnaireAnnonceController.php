@@ -67,12 +67,20 @@ class GestionnaireAnnonceController extends Controller
     {
         $annonce->load(['auteur', 'classe']);
 
+        $statsRow = $annonce->notifications()
+            ->selectRaw('COUNT(*) as destinataires')
+            ->selectRaw("SUM(CASE WHEN email_statut = 'sent' THEN 1 ELSE 0 END) as emails_envoyes")
+            ->selectRaw("SUM(CASE WHEN email_statut = 'queued' THEN 1 ELSE 0 END) as emails_en_file")
+            ->selectRaw("SUM(CASE WHEN email_statut = 'failed' THEN 1 ELSE 0 END) as emails_echoues")
+            ->selectRaw('SUM(CASE WHEN lue = 1 THEN 1 ELSE 0 END) as lues')
+            ->first();
+
         $stats = [
-            'destinataires' => $annonce->notifications()->count(),
-            'emails_envoyes' => $annonce->notifications()->where('email_statut', 'sent')->count(),
-            'emails_en_file' => $annonce->notifications()->where('email_statut', 'queued')->count(),
-            'emails_echoues' => $annonce->notifications()->where('email_statut', 'failed')->count(),
-            'lues' => $annonce->notifications()->where('lue', true)->count(),
+            'destinataires' => (int) ($statsRow->destinataires ?? 0),
+            'emails_envoyes' => (int) ($statsRow->emails_envoyes ?? 0),
+            'emails_en_file' => (int) ($statsRow->emails_en_file ?? 0),
+            'emails_echoues' => (int) ($statsRow->emails_echoues ?? 0),
+            'lues' => (int) ($statsRow->lues ?? 0),
         ];
 
         return view('annonces.show', compact('annonce', 'stats'));

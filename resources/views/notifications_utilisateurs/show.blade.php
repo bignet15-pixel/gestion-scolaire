@@ -1,10 +1,10 @@
 <x-app-layout>
-    <div class="container">
+    <div class="container communication-page">
         @if (session('success'))
             <div class="alert alert-success">{{ session('success') }}</div>
         @endif
 
-        <div class="detail-header-card">
+        <div class="detail-header-card communication-hero">
             <div>
                 <div class="detail-kicker">{{ $notification->libelleType() }}</div>
                 <h1>{{ $notification->titre }}</h1>
@@ -22,21 +22,29 @@
             </div>
         </div>
 
-        <div class="card">
-            <h2>Détail</h2>
-            <div class="announcement-content">
-                {!! nl2br(e($notification->message)) !!}
-            </div>
-        </div>
+        <div class="communication-detail-layout">
+            <div class="card communication-article-card">
+                <div class="communication-card-title">
+                    <div>
+                        <h2>Détail de la notification</h2>
+                        <p>Message complet envoyé à votre compte.</p>
+                    </div>
+                </div>
 
-        <div class="card">
-            <h2>Suivi</h2>
-            <dl class="detail-list">
-                <div><dt>Statut lecture</dt><dd>{{ $notification->lue ? 'Lue' : 'Non lue' }}</dd></div>
-                <div><dt>Lue le</dt><dd>{{ $notification->lue_le?->format('d/m/Y H:i') ?? '-' }}</dd></div>
-                <div><dt>Email</dt><dd>{{ $notification->email_statut }}</dd></div>
-                <div><dt>Email envoyé le</dt><dd>{{ $notification->email_envoye_le?->format('d/m/Y H:i') ?? '-' }}</dd></div>
-            </dl>
+                <div class="announcement-content communication-content-box">
+                    {!! nl2br(e($notification->message)) !!}
+                </div>
+            </div>
+
+            <div class="card communication-side-card">
+                <h2>Suivi</h2>
+                <dl class="detail-list communication-detail-list">
+                    <div><dt>Statut lecture</dt><dd>{{ $notification->lue ? 'Lue' : 'Non lue' }}</dd></div>
+                    <div><dt>Lue le</dt><dd>{{ $notification->lue_le?->format('d/m/Y H:i') ?? '-' }}</dd></div>
+                    <div><dt>Email</dt><dd>{{ $notification->email_statut }}</dd></div>
+                    <div><dt>Email envoyé le</dt><dd>{{ $notification->email_envoye_le?->format('d/m/Y H:i') ?? '-' }}</dd></div>
+                </dl>
+            </div>
         </div>
     </div>
 </x-app-layout>
