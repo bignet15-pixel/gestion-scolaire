@@ -27,3 +27,40 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Fichiers sensibles / locaux
+.env
+.env.*
+!.env.example
+
+# Dépendances
+/vendor
+/node_modules
+
+# Build frontend
+/public/build
+/public/hot
+
+# Storage local
+/storage/*.key
+/storage/logs/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/app/firebase/*
+/storage/app/*.json
+
+# Lien symbolique local
+/public/storage
+
+# Archives / dumps
+*.zip
+*.tar
+*.tar.gz
+*.sql
+*.sqlite
+*.db
+
+# IDE
+.idea/
+.vscode/
