@@ -55,7 +55,7 @@ class GestionnaireAnnonceController extends Controller
 
             return redirect()
                 ->route('annonces.show', $annonce)
-                ->with('success', "Annonce publiée avec succès. {$nombre} notification(s) préparée(s) et email(s) envoyé(s) selon disponibilité des adresses.");
+                ->with('success', "Annonce publiée avec succès. {$nombre} notification(s) préparée(s) et email(s) placé(s) dans la file d’attente.");
         }
 
         return redirect()
@@ -70,6 +70,7 @@ class GestionnaireAnnonceController extends Controller
         $stats = [
             'destinataires' => $annonce->notifications()->count(),
             'emails_envoyes' => $annonce->notifications()->where('email_statut', 'sent')->count(),
+            'emails_en_file' => $annonce->notifications()->where('email_statut', 'queued')->count(),
             'emails_echoues' => $annonce->notifications()->where('email_statut', 'failed')->count(),
             'lues' => $annonce->notifications()->where('lue', true)->count(),
         ];
@@ -99,7 +100,7 @@ class GestionnaireAnnonceController extends Controller
 
             return redirect()
                 ->route('annonces.show', $annonce)
-                ->with('success', "Annonce modifiée et publiée. {$nombre} notification(s) préparée(s) et email(s) envoyé(s) selon disponibilité des adresses.");
+                ->with('success', "Annonce modifiée et publiée. {$nombre} notification(s) préparée(s) et email(s) placé(s) dans la file d’attente.");
         }
 
         return redirect()
@@ -134,7 +135,7 @@ class GestionnaireAnnonceController extends Controller
 
         return redirect()
             ->route('annonces.show', $annonce)
-            ->with('success', "Annonce publiée avec succès. {$nombre} notification(s) préparée(s) et email(s) envoyé(s) selon disponibilité des adresses.");
+            ->with('success', "Annonce publiée avec succès. {$nombre} notification(s) préparée(s) et email(s) placé(s) dans la file d’attente.");
     }
 
     private function validateAnnonce(Request $request, ?Annonce $annonce = null): array

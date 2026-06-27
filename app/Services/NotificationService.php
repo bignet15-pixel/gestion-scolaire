@@ -2,16 +2,14 @@
 
 namespace App\Services;
 
-use App\Mail\AnnonceDetailMail;
-use App\Mail\NotificationAlertMail;
+use App\Jobs\SendAnnonceDetailEmail;
+use App\Jobs\SendNotificationAlertEmail;
 use App\Models\Annonce;
 use App\Models\Classe;
 use App\Models\NotificationUtilisateur;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Mail;
-use Throwable;
 
 class NotificationService
 {
@@ -110,7 +108,7 @@ class NotificationService
             ]);
         }
 
-        if ($notification->email_statut !== 'sent') {
+        if (! in_array($notification->email_statut, ['sent', 'queued'], true)) {
             $this->envoyerEmailAnnonce($notification, $annonce);
         }
 
@@ -165,56 +163,44 @@ class NotificationService
 
     private function envoyerEmailNotification(NotificationUtilisateur $notification): void
     {
-        try {
-            if (! $notification->user?->email) {
-                $notification->update([
-                    'email_statut' => 'failed',
-                    'email_erreur' => 'Aucune adresse email disponible pour le destinataire.',
-                ]);
-
-                return;
-            }
-
-            Mail::to($notification->user->email)->send(new NotificationAlertMail($notification));
-
-            $notification->update([
-                'email_statut' => 'sent',
-                'email_envoye_le' => now(),
-                'email_erreur' => null,
-            ]);
-        } catch (Throwable $exception) {
+        if (! $notification->user?->email) {
             $notification->update([
                 'email_statut' => 'failed',
-                'email_erreur' => mb_substr($exception->getMessage(), 0, 2000),
+                'email_erreur' => 'Aucune adresse email disponible pour le destinataire.',
             ]);
+
+            return;
         }
+
+        $notification->update([
+            'email_statut' => 'queued',
+            'email_erreur' => null,
+        ]);
+
+        SendNotificationAlertEmail::dispatch($notification->id)
+            ->afterCommit()
+            ->onQueue('emails');
     }
 
     private function envoyerEmailAnnonce(NotificationUtilisateur $notification, Annonce $annonce): void
     {
-        try {
-            if (! $notification->user?->email) {
-                $notification->update([
-                    'email_statut' => 'failed',
-                    'email_erreur' => 'Aucune adresse email disponible pour le destinataire.',
-                ]);
-
-                return;
-            }
-
-            Mail::to($notification->user->email)->send(new AnnonceDetailMail($annonce));
-
-            $notification->update([
-                'email_statut' => 'sent',
-                'email_envoye_le' => now(),
-                'email_erreur' => null,
-            ]);
-        } catch (Throwable $exception) {
+        if (! $notification->user?->email) {
             $notification->update([
                 'email_statut' => 'failed',
-                'email_erreur' => mb_substr($exception->getMessage(), 0, 2000),
+                'email_erreur' => 'Aucune adresse email disponible pour le destinataire.',
             ]);
+
+            return;
         }
+
+        $notification->update([
+            'email_statut' => 'queued',
+            'email_erreur' => null,
+        ]);
+
+        SendAnnonceDetailEmail::dispatch($notification->id, $annonce->id)
+            ->afterCommit()
+            ->onQueue('emails');
     }
 
     private function resumeEmailParDefaut(string $type): string

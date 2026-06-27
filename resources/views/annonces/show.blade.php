@@ -16,7 +16,7 @@
                 <a href="{{ route('annonces.edit', $annonce) }}" class="btn">Modifier</a>
 
                 @if (! $annonce->est_publiee)
-                    <form method="POST" action="{{ route('annonces.publier', $annonce) }}" data-confirm="Publier cette annonce et envoyer les emails aux destinataires ?" data-confirm-button="Publier">
+                    <form method="POST" action="{{ route('annonces.publier', $annonce) }}" data-confirm="Publier cette annonce et placer les emails dans la file d’attente ?" data-confirm-button="Publier">
                         @csrf
                         <button type="submit" class="btn btn-primary">Publier</button>
                     </form>
@@ -38,6 +38,10 @@
             <div class="stat-card">
                 <div class="stat-title">Destinataires</div>
                 <div class="stat-value">{{ $stats['destinataires'] }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Emails en file</div>
+                <div class="stat-value">{{ $stats['emails_en_file'] ?? 0 }}</div>
             </div>
             <div class="stat-card">
                 <div class="stat-title">Emails envoyés</div>

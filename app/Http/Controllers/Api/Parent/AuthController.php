@@ -10,7 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
+use App\Services\QueuedMailService;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -184,14 +184,11 @@ class AuthController extends Controller
                 'created_at' => now(),
             ]);
 
-            Mail::send('emails.auth.password-otp', [
-                'user' => $user,
-                'code' => $code,
-                'expirationMinutes' => self::OTP_EXPIRATION_MINUTES,
-            ], function ($message) use ($user) {
-                $message->to($user->email)
-                    ->subject('Code de réinitialisation du mot de passe');
-            });
+            app(QueuedMailService::class)->envoyerOtpMotDePasse(
+                $user,
+                $code,
+                self::OTP_EXPIRATION_MINUTES
+            );
         }
 
         return $this->success('Si un compte parent existe avec cette adresse, un code OTP a été envoyé par email.');
